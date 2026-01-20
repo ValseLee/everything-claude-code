@@ -1,8 +1,6 @@
 # Project Guidelines Skill (Example)
 
-This is an example of a project-specific skill. Use this as a template for your own projects.
-
-Based on a real production application: [Zenith](https://zenith.chat) - AI-powered customer discovery platform.
+This is an example of a project-specific skill. Use this as a template for your own iOS projects.
 
 ---
 
@@ -13,41 +11,51 @@ Reference this skill when working on the specific project it's designed for. Pro
 - File structure
 - Code patterns
 - Testing requirements
-- Deployment workflow
+- Build and deployment workflow
 
 ---
 
 ## Architecture Overview
 
 **Tech Stack:**
-- **Frontend**: Next.js 15 (App Router), TypeScript, React
-- **Backend**: FastAPI (Python), Pydantic models
-- **Database**: Supabase (PostgreSQL)
-- **AI**: Claude API with tool calling and structured output
-- **Deployment**: Google Cloud Run
-- **Testing**: Playwright (E2E), pytest (backend), React Testing Library
+- **UI Framework**: SwiftUI (iOS 18+)
+- **Architecture**: Clean Architecture + MVVM
+- **Data Persistence**: SwiftData
+- **Networking**: URLSession with async/await
+- **Dependency Injection**: Manual (Protocol-based)
+- **Testing**: Swift Testing framework
+- **CI/CD**: GitHub Actions + Fastlane
 
-**Services:**
+**Module Structure:**
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                         Frontend                            │
-│  Next.js 15 + TypeScript + TailwindCSS                     │
-│  Deployed: Vercel / Cloud Run                              │
+│                           App                               │
+│  Main app target, composition root, entry point             │
 └─────────────────────────────────────────────────────────────┘
                               │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                         Backend                             │
-│  FastAPI + Python 3.11 + Pydantic                          │
-│  Deployed: Cloud Run                                       │
-└─────────────────────────────────────────────────────────────┘
-                              │
-              ┌───────────────┼───────────────┐
-              ▼               ▼               ▼
-        ┌──────────┐   ┌──────────┐   ┌──────────┐
-        │ Supabase │   │  Claude  │   │  Redis   │
-        │ Database │   │   API    │   │  Cache   │
-        └──────────┘   └──────────┘   └──────────┘
+         ┌────────────────────┼────────────────────┐
+         ▼                    ▼                    ▼
+┌────────────────┐   ┌────────────────┐   ┌────────────────┐
+│   FeatureHome  │   │  FeatureOrder  │   │ FeatureProfile │
+│    (Module)    │   │    (Module)    │   │    (Module)    │
+└───────┬────────┘   └───────┬────────┘   └───────┬────────┘
+        │                    │                    │
+        └────────────────────┼────────────────────┘
+                             │
+                             ▼
+                    ┌────────────────┐
+                    │     Domain     │
+                    │  (UseCases,    │
+                    │   Entities)    │
+                    └───────┬────────┘
+                            │
+                ┌───────────┼───────────┐
+                ▼           ▼           ▼
+          ┌──────────┐ ┌──────────┐ ┌──────────┐
+          │   Data   │ │ Network  │ │   Core   │
+          │(SwiftData│ │(API      │ │(Shared   │
+          │ Repos)   │ │ Client)  │ │ Utils)   │
+          └──────────┘ └──────────┘ └──────────┘
 ```
 
 ---
@@ -55,163 +63,218 @@ Reference this skill when working on the specific project it's designed for. Pro
 ## File Structure
 
 ```
-project/
-├── frontend/
-│   └── src/
-│       ├── app/              # Next.js app router pages
-│       │   ├── api/          # API routes
-│       │   ├── (auth)/       # Auth-protected routes
-│       │   └── workspace/    # Main app workspace
-│       ├── components/       # React components
-│       │   ├── ui/           # Base UI components
-│       │   ├── forms/        # Form components
-│       │   └── layouts/      # Layout components
-│       ├── hooks/            # Custom React hooks
-│       ├── lib/              # Utilities
-│       ├── types/            # TypeScript definitions
-│       └── config/           # Configuration
+MyApp/
+├── App/
+│   ├── MyApp.swift                 # @main entry point
+│   ├── DependencyContainer.swift   # Composition root
+│   └── AppConfiguration.swift      # App-wide config
 │
-├── backend/
-│   ├── routers/              # FastAPI route handlers
-│   ├── models.py             # Pydantic models
-│   ├── main.py               # FastAPI app entry
-│   ├── auth_system.py        # Authentication
-│   ├── database.py           # Database operations
-│   ├── services/             # Business logic
-│   └── tests/                # pytest tests
+├── Modules/
+│   ├── Core/
+│   │   ├── Extensions/
+│   │   ├── Utilities/
+│   │   └── Package.swift
+│   │
+│   ├── Domain/
+│   │   ├── Entities/
+│   │   ├── UseCases/
+│   │   ├── Repositories/           # Protocols only
+│   │   └── Package.swift
+│   │
+│   ├── Data/
+│   │   ├── Repositories/           # Implementations
+│   │   ├── DataSources/
+│   │   ├── Models/                 # DTOs, SwiftData models
+│   │   └── Package.swift
+│   │
+│   ├── Network/
+│   │   ├── APIClient.swift
+│   │   ├── Endpoints/
+│   │   ├── DTOs/
+│   │   └── Package.swift
+│   │
+│   └── Features/
+│       ├── Home/
+│       │   ├── Views/
+│       │   │   ├── HomeView.swift
+│       │   │   └── HomeView+ViewModel.swift
+│       │   ├── Components/
+│       │   └── Package.swift
+│       │
+│       ├── Order/
+│       └── Profile/
 │
-├── deploy/                   # Deployment configs
-├── docs/                     # Documentation
-└── scripts/                  # Utility scripts
+├── Resources/
+│   ├── Assets.xcassets
+│   ├── Localizable.xcstrings
+│   └── Info.plist
+│
+├── Tests/
+│   ├── UnitTests/
+│   ├── IntegrationTests/
+│   └── UITests/
+│
+└── MyApp.xcworkspace
 ```
 
 ---
 
 ## Code Patterns
 
-### API Response Format (FastAPI)
+### View-ViewModel Pattern
 
-```python
-from pydantic import BaseModel
-from typing import Generic, TypeVar, Optional
+```swift
+// HomeView.swift
+import SwiftUI
 
-T = TypeVar('T')
+struct HomeView: View {
+    @State private var viewModel: ViewModel
 
-class ApiResponse(BaseModel, Generic[T]):
-    success: bool
-    data: Optional[T] = None
-    error: Optional[str] = None
-
-    @classmethod
-    def ok(cls, data: T) -> "ApiResponse[T]":
-        return cls(success=True, data=data)
-
-    @classmethod
-    def fail(cls, error: str) -> "ApiResponse[T]":
-        return cls(success=False, error=error)
-```
-
-### Frontend API Calls (TypeScript)
-
-```typescript
-interface ApiResponse<T> {
-  success: boolean
-  data?: T
-  error?: string
-}
-
-async function fetchApi<T>(
-  endpoint: string,
-  options?: RequestInit
-): Promise<ApiResponse<T>> {
-  try {
-    const response = await fetch(`/api${endpoint}`, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options?.headers,
-      },
-    })
-
-    if (!response.ok) {
-      return { success: false, error: `HTTP ${response.status}` }
+    init(dependencies: HomeDependencies) {
+        _viewModel = State(initialValue: ViewModel(
+            fetchItemsUseCase: dependencies.fetchItemsUseCase
+        ))
     }
 
-    return await response.json()
-  } catch (error) {
-    return { success: false, error: String(error) }
-  }
-}
-```
-
-### Claude AI Integration (Structured Output)
-
-```python
-from anthropic import Anthropic
-from pydantic import BaseModel
-
-class AnalysisResult(BaseModel):
-    summary: str
-    key_points: list[str]
-    confidence: float
-
-async def analyze_with_claude(content: str) -> AnalysisResult:
-    client = Anthropic()
-
-    response = client.messages.create(
-        model="claude-sonnet-4-5-20250514",
-        max_tokens=1024,
-        messages=[{"role": "user", "content": content}],
-        tools=[{
-            "name": "provide_analysis",
-            "description": "Provide structured analysis",
-            "input_schema": AnalysisResult.model_json_schema()
-        }],
-        tool_choice={"type": "tool", "name": "provide_analysis"}
-    )
-
-    # Extract tool use result
-    tool_use = next(
-        block for block in response.content
-        if block.type == "tool_use"
-    )
-
-    return AnalysisResult(**tool_use.input)
-```
-
-### Custom Hooks (React)
-
-```typescript
-import { useState, useCallback } from 'react'
-
-interface UseApiState<T> {
-  data: T | null
-  loading: boolean
-  error: string | null
-}
-
-export function useApi<T>(
-  fetchFn: () => Promise<ApiResponse<T>>
-) {
-  const [state, setState] = useState<UseApiState<T>>({
-    data: null,
-    loading: false,
-    error: null,
-  })
-
-  const execute = useCallback(async () => {
-    setState(prev => ({ ...prev, loading: true, error: null }))
-
-    const result = await fetchFn()
-
-    if (result.success) {
-      setState({ data: result.data!, loading: false, error: null })
-    } else {
-      setState({ data: null, loading: false, error: result.error! })
+    var body: some View {
+        content
+            .task { await viewModel.loadItems() }
     }
-  }, [fetchFn])
 
-  return { ...state, execute }
+    @ViewBuilder
+    private var content: some View {
+        switch viewModel.state {
+        case .loading:
+            ProgressView()
+        case .loaded(let items):
+            itemList(items)
+        case .error(let message):
+            errorView(message)
+        }
+    }
+}
+
+// HomeView+ViewModel.swift
+extension HomeView {
+    @Observable @MainActor
+    final class ViewModel {
+        private(set) var state: ViewState = .loading
+
+        enum ViewState: Equatable {
+            case loading
+            case loaded([Item])
+            case error(String)
+        }
+
+        private let fetchItemsUseCase: FetchItemsUseCase
+
+        init(fetchItemsUseCase: FetchItemsUseCase) {
+            self.fetchItemsUseCase = fetchItemsUseCase
+        }
+
+        func loadItems() async {
+            state = .loading
+            do {
+                let items = try await fetchItemsUseCase.execute()
+                state = .loaded(items)
+            } catch {
+                state = .error(error.localizedDescription)
+            }
+        }
+    }
+}
+```
+
+### Repository Pattern
+
+```swift
+// Domain/Repositories/ItemRepository.swift (Protocol)
+protocol ItemRepository {
+    func fetchAll() async throws -> [Item]
+    func fetch(id: UUID) async throws -> Item
+    func save(_ item: Item) async throws
+    func delete(id: UUID) async throws
+}
+
+// Data/Repositories/ItemRepositoryImpl.swift (Implementation)
+final class ItemRepositoryImpl: ItemRepository {
+    private let networkService: NetworkService
+    private let localDataSource: ItemLocalDataSource
+
+    init(networkService: NetworkService, localDataSource: ItemLocalDataSource) {
+        self.networkService = networkService
+        self.localDataSource = localDataSource
+    }
+
+    func fetchAll() async throws -> [Item] {
+        // Try local first
+        let localItems = try await localDataSource.fetchAll()
+        if !localItems.isEmpty {
+            return localItems
+        }
+
+        // Fetch from network
+        let dtos = try await networkService.request(endpoint: .items)
+        let items = dtos.map { ItemMapper.toDomain($0) }
+
+        // Cache locally
+        try await localDataSource.saveAll(items)
+
+        return items
+    }
+}
+```
+
+### Use Case Pattern
+
+```swift
+// Domain/UseCases/FetchItemsUseCase.swift
+protocol FetchItemsUseCase {
+    func execute() async throws -> [Item]
+}
+
+final class FetchItemsUseCaseImpl: FetchItemsUseCase {
+    private let repository: ItemRepository
+
+    init(repository: ItemRepository) {
+        self.repository = repository
+    }
+
+    func execute() async throws -> [Item] {
+        let items = try await repository.fetchAll()
+        return items.filter { $0.isActive }.sorted { $0.createdAt > $1.createdAt }
+    }
+}
+```
+
+### API Client
+
+```swift
+// Network/APIClient.swift
+actor APIClient {
+    private let baseURL: URL
+    private let session: URLSession
+
+    init(baseURL: URL, session: URLSession = .shared) {
+        self.baseURL = baseURL
+        self.session = session
+    }
+
+    func request<T: Decodable>(endpoint: Endpoint) async throws -> T {
+        let request = try endpoint.makeRequest(baseURL: baseURL)
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+
+        guard 200..<300 ~= httpResponse.statusCode else {
+            throw APIError.httpError(httpResponse.statusCode)
+        }
+
+        return try JSONDecoder().decode(T.self, from: data)
+    }
 }
 ```
 
@@ -219,127 +282,140 @@ export function useApi<T>(
 
 ## Testing Requirements
 
-### Backend (pytest)
+### Unit Tests (Swift Testing)
 
 ```bash
 # Run all tests
-poetry run pytest tests/
+xcodebuild test -scheme MyApp -destination 'platform=iOS Simulator,name=iPhone 15'
 
 # Run with coverage
-poetry run pytest tests/ --cov=. --cov-report=html
-
-# Run specific test file
-poetry run pytest tests/test_auth.py -v
+xcodebuild test -scheme MyApp \
+  -destination 'platform=iOS Simulator,name=iPhone 15' \
+  -enableCodeCoverage YES
 ```
 
 **Test structure:**
-```python
-import pytest
-from httpx import AsyncClient
-from main import app
+```swift
+import Testing
+@testable import Domain
 
-@pytest.fixture
-async def client():
-    async with AsyncClient(app=app, base_url="http://test") as ac:
-        yield ac
+@Suite("FetchItemsUseCase")
+struct FetchItemsUseCaseTests {
+    @Test("returns filtered and sorted items")
+    func fetchItems() async throws {
+        let mockRepository = MockItemRepository()
+        mockRepository.items = [
+            Item(id: UUID(), name: "B", isActive: true, createdAt: .now),
+            Item(id: UUID(), name: "A", isActive: false, createdAt: .now),
+            Item(id: UUID(), name: "C", isActive: true, createdAt: .now.addingTimeInterval(-100))
+        ]
 
-@pytest.mark.asyncio
-async def test_health_check(client: AsyncClient):
-    response = await client.get("/health")
-    assert response.status_code == 200
-    assert response.json()["status"] == "healthy"
+        let useCase = FetchItemsUseCaseImpl(repository: mockRepository)
+        let result = try await useCase.execute()
+
+        #expect(result.count == 2)  // Only active items
+        #expect(result[0].name == "B")  // Sorted by date desc
+    }
+}
 ```
 
-### Frontend (React Testing Library)
+### Coverage Requirements
 
-```bash
-# Run tests
-npm run test
-
-# Run with coverage
-npm run test -- --coverage
-
-# Run E2E tests
-npm run test:e2e
-```
-
-**Test structure:**
-```typescript
-import { render, screen, fireEvent } from '@testing-library/react'
-import { WorkspacePanel } from './WorkspacePanel'
-
-describe('WorkspacePanel', () => {
-  it('renders workspace correctly', () => {
-    render(<WorkspacePanel />)
-    expect(screen.getByRole('main')).toBeInTheDocument()
-  })
-
-  it('handles session creation', async () => {
-    render(<WorkspacePanel />)
-    fireEvent.click(screen.getByText('New Session'))
-    expect(await screen.findByText('Session created')).toBeInTheDocument()
-  })
-})
-```
+- **Minimum**: 80% line coverage
+- **Domain layer**: 90%+ coverage
+- **Critical paths**: 100% coverage
 
 ---
 
-## Deployment Workflow
+## Build and Deployment
 
-### Pre-Deployment Checklist
+### Pre-Release Checklist
 
 - [ ] All tests passing locally
-- [ ] `npm run build` succeeds (frontend)
-- [ ] `poetry run pytest` passes (backend)
-- [ ] No hardcoded secrets
-- [ ] Environment variables documented
-- [ ] Database migrations ready
+- [ ] Build succeeds for Release configuration
+- [ ] No hardcoded secrets in code
+- [ ] Info.plist privacy descriptions complete
+- [ ] Version and build number updated
+- [ ] Changelog updated
 
-### Deployment Commands
+### Build Commands
 
 ```bash
-# Build and deploy frontend
-cd frontend && npm run build
-gcloud run deploy frontend --source .
+# Build for testing
+xcodebuild build-for-testing \
+  -scheme MyApp \
+  -destination 'platform=iOS Simulator,name=iPhone 15'
 
-# Build and deploy backend
-cd backend
-gcloud run deploy backend --source .
+# Archive for distribution
+xcodebuild archive \
+  -scheme MyApp \
+  -archivePath ./build/MyApp.xcarchive \
+  -destination 'generic/platform=iOS'
+
+# Export IPA
+xcodebuild -exportArchive \
+  -archivePath ./build/MyApp.xcarchive \
+  -exportPath ./build \
+  -exportOptionsPlist ExportOptions.plist
 ```
 
-### Environment Variables
+### Environment Configuration
 
-```bash
-# Frontend (.env.local)
-NEXT_PUBLIC_API_URL=https://api.example.com
-NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+```swift
+// AppConfiguration.swift
+enum AppConfiguration {
+    enum Environment {
+        case debug
+        case staging
+        case production
+    }
 
-# Backend (.env)
-DATABASE_URL=postgresql://...
-ANTHROPIC_API_KEY=sk-ant-...
-SUPABASE_URL=https://xxx.supabase.co
-SUPABASE_KEY=eyJ...
+    static var current: Environment {
+        #if DEBUG
+        return .debug
+        #elseif STAGING
+        return .staging
+        #else
+        return .production
+        #endif
+    }
+
+    static var apiBaseURL: URL {
+        switch current {
+        case .debug:
+            return URL(string: "https://api-dev.example.com")!
+        case .staging:
+            return URL(string: "https://api-staging.example.com")!
+        case .production:
+            return URL(string: "https://api.example.com")!
+        }
+    }
+}
 ```
 
 ---
 
 ## Critical Rules
 
-1. **No emojis** in code, comments, or documentation
-2. **Immutability** - never mutate objects or arrays
-3. **TDD** - write tests before implementation
-4. **80% coverage** minimum
-5. **Many small files** - 200-400 lines typical, 800 max
-6. **No console.log** in production code
-7. **Proper error handling** with try/catch
-8. **Input validation** with Pydantic/Zod
+1. **Pure Functions** - minimize side effects
+2. **No Forced Unwrap** - never use `!` except for compile-time guaranteed values
+3. **Stateless Views** - all state in ViewModel
+4. **TDD** - write tests before implementation
+5. **80% coverage** minimum
+6. **Many small files** - 200-400 lines typical, 800 max
+7. **No print statements** in production code
+8. **Proper error handling** with typed errors
+9. **Keychain for secrets** - never UserDefaults
 
 ---
 
 ## Related Skills
 
-- `coding-standards.md` - General coding best practices
-- `backend-patterns.md` - API and database patterns
-- `frontend-patterns.md` - React and Next.js patterns
+- `swift-coding-standards.md` - Swift coding best practices
+- `swift-concurrency.md` - Async/await and actor patterns
+- `swiftui-patterns.md` - SwiftUI component patterns
+- `swiftdata.md` - Data persistence patterns
+- `ios-architecture.md` - Clean and modular architecture
+- `xcode-project.md` - Project configuration
 - `tdd-workflow/` - Test-driven development methodology
+- `security-review/` - iOS security checklist

@@ -1,179 +1,305 @@
 ---
-description: Generate and run end-to-end tests with Playwright. Creates test journeys, runs tests, captures screenshots/videos/traces, and uploads artifacts.
+description: Generate and run end-to-end UI tests with XCUITest. Creates test journeys, runs tests, captures screenshots, and generates reports.
 ---
 
 # E2E Command
 
-This command invokes the **e2e-runner** agent to generate, maintain, and execute end-to-end tests using Playwright.
+This command invokes the **e2e-runner** agent to generate, maintain, and execute end-to-end UI tests using XCUITest for iOS applications.
 
 ## What This Command Does
 
-1. **Generate Test Journeys** - Create Playwright tests for user flows
-2. **Run E2E Tests** - Execute tests across browsers
-3. **Capture Artifacts** - Screenshots, videos, traces on failures
-4. **Upload Results** - HTML reports and JUnit XML
+1. **Generate Test Journeys** - Create XCUITest tests for user flows
+2. **Run UI Tests** - Execute tests on simulators/devices
+3. **Capture Artifacts** - Screenshots and recordings on failures
+4. **Generate Reports** - Test results and coverage
 5. **Identify Flaky Tests** - Quarantine unstable tests
 
 ## When to Use
 
 Use `/e2e` when:
-- Testing critical user journeys (login, trading, payments)
+- Testing critical user journeys (onboarding, authentication, purchases)
 - Verifying multi-step flows work end-to-end
 - Testing UI interactions and navigation
-- Validating integration between frontend and backend
-- Preparing for production deployment
+- Validating integration between screens
+- Preparing for App Store submission
 
 ## How It Works
 
 The e2e-runner agent will:
 
 1. **Analyze user flow** and identify test scenarios
-2. **Generate Playwright test** using Page Object Model pattern
-3. **Run tests** across multiple browsers (Chrome, Firefox, Safari)
-4. **Capture failures** with screenshots, videos, and traces
+2. **Generate XCUITest** using Page Object pattern
+3. **Run tests** on specified simulator/device
+4. **Capture failures** with screenshots and recordings
 5. **Generate report** with results and artifacts
 6. **Identify flaky tests** and recommend fixes
 
 ## Example Usage
 
 ```
-User: /e2e Test the market search and view flow
+User: /e2e Test the portfolio creation and viewing flow
 
 Agent (e2e-runner):
-# E2E Test Generation: Market Search and View Flow
+# E2E Test Generation: Portfolio Creation and Viewing Flow
 
 ## Test Scenario Identified
 
-**User Journey:** Market Search → View Results → Click Market → View Details
+**User Journey:** Create Portfolio → Add Assets → View Portfolio → Check Performance
 
 **Test Coverage:**
-1. Navigate to markets page
-2. Perform semantic search
-3. Verify search results
-4. Click on first result
-5. Verify market details page loads
-6. Verify chart renders
+1. Navigate to portfolio tab
+2. Tap create new portfolio
+3. Enter portfolio name
+4. Add assets to portfolio
+5. Save portfolio
+6. Verify portfolio appears in list
+7. View portfolio details
+8. Verify performance chart renders
 
 ## Generated Test Code
 
-```typescript
-// tests/e2e/markets/search-and-view.spec.ts
-import { test, expect } from '@playwright/test'
-import { MarketsPage } from '../../pages/MarketsPage'
-import { MarketDetailsPage } from '../../pages/MarketDetailsPage'
+```swift
+// UITests/Portfolio/PortfolioCreationTests.swift
+import XCTest
 
-test.describe('Market Search and View Flow', () => {
-  test('user can search markets and view details', async ({ page }) => {
-    // 1. Navigate to markets page
-    const marketsPage = new MarketsPage(page)
-    await marketsPage.goto()
+final class PortfolioCreationTests: XCTestCase {
+    private var app: XCUIApplication!
+    private var portfolioPage: PortfolioPage!
+    private var createPortfolioPage: CreatePortfolioPage!
 
-    // Verify page loaded
-    await expect(page).toHaveTitle(/Markets/)
-    await expect(page.locator('h1')).toContainText('Markets')
+    override func setUpWithError() throws {
+        continueAfterFailure = false
+        app = XCUIApplication()
+        app.launchArguments = ["--uitesting"]
+        app.launch()
 
-    // 2. Perform semantic search
-    await marketsPage.searchMarkets('election')
+        portfolioPage = PortfolioPage(app: app)
+        createPortfolioPage = CreatePortfolioPage(app: app)
+    }
 
-    // Wait for API response
-    await page.waitForResponse(resp =>
-      resp.url().includes('/api/markets/search') && resp.status() === 200
-    )
+    override func tearDownWithError() throws {
+        app = nil
+    }
 
-    // 3. Verify search results
-    const marketCards = marketsPage.marketCards
-    await expect(marketCards.first()).toBeVisible()
-    const resultCount = await marketCards.count()
-    expect(resultCount).toBeGreaterThan(0)
+    @MainActor
+    func testUserCanCreatePortfolioAndViewDetails() throws {
+        // 1. Navigate to portfolio tab
+        portfolioPage.navigateToPortfolios()
 
-    // Take screenshot of search results
-    await page.screenshot({ path: 'artifacts/search-results.png' })
+        // Verify page loaded
+        XCTAssertTrue(portfolioPage.isDisplayed)
+        XCTAssertTrue(portfolioPage.headerTitle.exists)
 
-    // 4. Click on first result
-    const firstMarketTitle = await marketCards.first().textContent()
-    await marketCards.first().click()
+        // 2. Tap create new portfolio
+        portfolioPage.tapCreateButton()
 
-    // 5. Verify market details page loads
-    await expect(page).toHaveURL(/\/markets\/[a-z0-9-]+/)
+        // 3. Enter portfolio name
+        let portfolioName = "Test Portfolio \(Date().timeIntervalSince1970)"
+        createPortfolioPage.enterName(portfolioName)
 
-    const detailsPage = new MarketDetailsPage(page)
-    await expect(detailsPage.marketName).toBeVisible()
-    await expect(detailsPage.marketDescription).toBeVisible()
+        // 4. Add assets to portfolio
+        createPortfolioPage.tapAddAsset()
+        createPortfolioPage.selectAsset(named: "AAPL")
+        createPortfolioPage.enterQuantity("10")
+        createPortfolioPage.confirmAsset()
 
-    // 6. Verify chart renders
-    await expect(detailsPage.priceChart).toBeVisible()
+        // Take screenshot of asset added
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Asset Added"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
 
-    // Verify market name matches
-    const detailsTitle = await detailsPage.marketName.textContent()
-    expect(detailsTitle?.toLowerCase()).toContain(
-      firstMarketTitle?.toLowerCase().substring(0, 20) || ''
-    )
+        // 5. Save portfolio
+        createPortfolioPage.tapSave()
 
-    // Take screenshot of market details
-    await page.screenshot({ path: 'artifacts/market-details.png' })
-  })
+        // Wait for save to complete
+        let saveExpectation = expectation(
+            for: NSPredicate(format: "exists == true"),
+            evaluatedWith: portfolioPage.portfolioCell(named: portfolioName)
+        )
+        wait(for: [saveExpectation], timeout: 5)
 
-  test('search with no results shows empty state', async ({ page }) => {
-    const marketsPage = new MarketsPage(page)
-    await marketsPage.goto()
+        // 6. Verify portfolio appears in list
+        XCTAssertTrue(portfolioPage.portfolioCell(named: portfolioName).exists)
 
-    // Search for non-existent market
-    await marketsPage.searchMarkets('xyznonexistentmarket123456')
+        // 7. View portfolio details
+        portfolioPage.tapPortfolio(named: portfolioName)
 
-    // Verify empty state
-    await expect(page.locator('[data-testid="no-results"]')).toBeVisible()
-    await expect(page.locator('[data-testid="no-results"]')).toContainText(
-      /no.*results|no.*markets/i
-    )
+        // 8. Verify performance chart renders
+        let detailsPage = PortfolioDetailsPage(app: app)
+        XCTAssertTrue(detailsPage.isDisplayed)
+        XCTAssertTrue(detailsPage.performanceChart.waitForExistence(timeout: 3))
+        XCTAssertTrue(detailsPage.assetList.exists)
 
-    const marketCount = await marketsPage.marketCards.count()
-    expect(marketCount).toBe(0)
-  })
+        // Take screenshot of portfolio details
+        let detailsScreenshot = XCTAttachment(screenshot: app.screenshot())
+        detailsScreenshot.name = "Portfolio Details"
+        detailsScreenshot.lifetime = .keepAlways
+        add(detailsScreenshot)
+    }
 
-  test('can clear search and see all markets again', async ({ page }) => {
-    const marketsPage = new MarketsPage(page)
-    await marketsPage.goto()
+    @MainActor
+    func testEmptyStateShowsCreatePrompt() throws {
+        // Navigate with empty state flag
+        app.launchArguments.append("--empty-portfolio-state")
+        app.launch()
 
-    // Initial market count
-    const initialCount = await marketsPage.marketCards.count()
+        portfolioPage.navigateToPortfolios()
 
-    // Perform search
-    await marketsPage.searchMarkets('trump')
-    await page.waitForLoadState('networkidle')
+        // Verify empty state
+        XCTAssertTrue(portfolioPage.emptyStateView.exists)
+        XCTAssertTrue(portfolioPage.emptyStateCreateButton.exists)
 
-    // Verify filtered results
-    const filteredCount = await marketsPage.marketCards.count()
-    expect(filteredCount).toBeLessThan(initialCount)
+        // Tap create from empty state
+        portfolioPage.emptyStateCreateButton.tap()
 
-    // Clear search
-    await marketsPage.searchInput.clear()
-    await page.waitForLoadState('networkidle')
+        // Verify create page opens
+        XCTAssertTrue(createPortfolioPage.isDisplayed)
+    }
 
-    // Verify all markets shown again
-    const finalCount = await marketsPage.marketCards.count()
-    expect(finalCount).toBe(initialCount)
-  })
-})
+    @MainActor
+    func testCanCancelPortfolioCreation() throws {
+        portfolioPage.navigateToPortfolios()
+        portfolioPage.tapCreateButton()
+
+        // Enter some data
+        createPortfolioPage.enterName("Cancelled Portfolio")
+
+        // Cancel
+        createPortfolioPage.tapCancel()
+
+        // Verify back on portfolio list
+        XCTAssertTrue(portfolioPage.isDisplayed)
+
+        // Verify portfolio was not created
+        XCTAssertFalse(portfolioPage.portfolioCell(named: "Cancelled Portfolio").exists)
+    }
+}
+```
+
+## Page Objects
+
+```swift
+// UITests/Pages/PortfolioPage.swift
+import XCTest
+
+struct PortfolioPage {
+    private let app: XCUIApplication
+
+    init(app: XCUIApplication) {
+        self.app = app
+    }
+
+    // MARK: - Elements
+
+    var isDisplayed: Bool {
+        app.navigationBars["Portfolios"].exists
+    }
+
+    var headerTitle: XCUIElement {
+        app.navigationBars["Portfolios"].staticTexts["Portfolios"]
+    }
+
+    var createButton: XCUIElement {
+        app.buttons["createPortfolioButton"]
+    }
+
+    var emptyStateView: XCUIElement {
+        app.otherElements["emptyStateView"]
+    }
+
+    var emptyStateCreateButton: XCUIElement {
+        app.buttons["emptyStateCreateButton"]
+    }
+
+    func portfolioCell(named name: String) -> XCUIElement {
+        app.cells.containing(.staticText, identifier: name).firstMatch
+    }
+
+    // MARK: - Actions
+
+    func navigateToPortfolios() {
+        app.tabBars.buttons["Portfolio"].tap()
+    }
+
+    func tapCreateButton() {
+        createButton.tap()
+    }
+
+    func tapPortfolio(named name: String) {
+        portfolioCell(named: name).tap()
+    }
+}
+
+// UITests/Pages/CreatePortfolioPage.swift
+struct CreatePortfolioPage {
+    private let app: XCUIApplication
+
+    init(app: XCUIApplication) {
+        self.app = app
+    }
+
+    var isDisplayed: Bool {
+        app.navigationBars["Create Portfolio"].exists
+    }
+
+    var nameTextField: XCUIElement {
+        app.textFields["portfolioNameField"]
+    }
+
+    func enterName(_ name: String) {
+        nameTextField.tap()
+        nameTextField.typeText(name)
+    }
+
+    func tapAddAsset() {
+        app.buttons["addAssetButton"].tap()
+    }
+
+    func selectAsset(named name: String) {
+        app.cells.containing(.staticText, identifier: name).firstMatch.tap()
+    }
+
+    func enterQuantity(_ quantity: String) {
+        let field = app.textFields["quantityField"]
+        field.tap()
+        field.typeText(quantity)
+    }
+
+    func confirmAsset() {
+        app.buttons["confirmAssetButton"].tap()
+    }
+
+    func tapSave() {
+        app.buttons["savePortfolioButton"].tap()
+    }
+
+    func tapCancel() {
+        app.buttons["Cancel"].tap()
+    }
+}
 ```
 
 ## Running Tests
 
 ```bash
 # Run the generated test
-npx playwright test tests/e2e/markets/search-and-view.spec.ts
+xcodebuild test \
+  -scheme MyAppUITests \
+  -destination 'platform=iOS Simulator,name=iPhone 16' \
+  -only-testing:MyAppUITests/PortfolioCreationTests \
+  2>&1 | xcbeautify
 
-Running 3 tests using 3 workers
+Test Suite PortfolioCreationTests started
+✓ testUserCanCreatePortfolioAndViewDetails (4.2s)
+✓ testEmptyStateShowsCreatePrompt (1.8s)
+✓ testCanCancelPortfolioCreation (2.1s)
 
-  ✓  [chromium] › search-and-view.spec.ts:5:3 › user can search markets and view details (4.2s)
-  ✓  [chromium] › search-and-view.spec.ts:52:3 › search with no results shows empty state (1.8s)
-  ✓  [chromium] › search-and-view.spec.ts:67:3 › can clear search and see all markets again (2.9s)
-
-  3 passed (9.1s)
+Executed 3 tests, with 0 failures (8.1s)
 
 Artifacts generated:
-- artifacts/search-results.png
-- artifacts/market-details.png
-- playwright-report/index.html
+- TestResults/Asset Added.png
+- TestResults/Portfolio Details.png
 ```
 
 ## Test Report
@@ -187,16 +313,15 @@ Artifacts generated:
 ║ Passed:     3 (100%)                                         ║
 ║ Failed:     0                                                ║
 ║ Flaky:      0                                                ║
-║ Duration:   9.1s                                             ║
+║ Duration:   8.1s                                             ║
 ╚══════════════════════════════════════════════════════════════╝
 
 Artifacts:
 📸 Screenshots: 2 files
 📹 Videos: 0 files (only on failure)
-🔍 Traces: 0 files (only on failure)
-📊 HTML Report: playwright-report/index.html
+📊 Test Results: TestResults/
 
-View report: npx playwright show-report
+View results: open TestResults/
 ```
 
 ✅ E2E test suite ready for CI/CD integration!
@@ -207,27 +332,26 @@ View report: npx playwright show-report
 When tests run, the following artifacts are captured:
 
 **On All Tests:**
-- HTML Report with timeline and results
-- JUnit XML for CI integration
+- Test results in `.xcresult` bundle
+- Performance metrics
 
 **On Failure Only:**
 - Screenshot of the failing state
-- Video recording of the test
-- Trace file for debugging (step-by-step replay)
-- Network logs
+- Screen recording (if enabled)
+- UI hierarchy dump
 - Console logs
 
 ## Viewing Artifacts
 
 ```bash
-# View HTML report in browser
-npx playwright show-report
+# Open test results
+open Build/Logs/Test/*.xcresult
 
-# View specific trace file
-npx playwright show-trace artifacts/trace-abc123.zip
+# Extract screenshots from xcresult
+xcrun xcresulttool get --path TestResults.xcresult --format json
 
-# Screenshots are saved in artifacts/ directory
-open artifacts/search-results.png
+# View in Xcode
+# Xcode > Window > Devices and Simulators > View Device Logs
 ```
 
 ## Flaky Test Detection
@@ -235,98 +359,131 @@ open artifacts/search-results.png
 If a test fails intermittently:
 
 ```
-⚠️  FLAKY TEST DETECTED: tests/e2e/markets/trade.spec.ts
+⚠️  FLAKY TEST DETECTED: PortfolioCreationTests/testUserCanCreatePortfolio
 
 Test passed 7/10 runs (70% pass rate)
 
 Common failure:
-"Timeout waiting for element '[data-testid="confirm-btn"]'"
+"Failed to find element 'savePortfolioButton' within 2.0 seconds"
 
 Recommended fixes:
-1. Add explicit wait: await page.waitForSelector('[data-testid="confirm-btn"]')
-2. Increase timeout: { timeout: 10000 }
-3. Check for race conditions in component
-4. Verify element is not hidden by animation
+1. Increase timeout: waitForExistence(timeout: 5)
+2. Add explicit wait for loading state to complete
+3. Check for animation completion before asserting
+4. Verify accessibility identifier is set correctly
 
-Quarantine recommendation: Mark as test.fixme() until fixed
+Quarantine recommendation: Mark with XCTExpectFailure until fixed
 ```
 
-## Browser Configuration
+## Device Configuration
 
-Tests run on multiple browsers by default:
-- ✅ Chromium (Desktop Chrome)
-- ✅ Firefox (Desktop)
-- ✅ WebKit (Desktop Safari)
-- ✅ Mobile Chrome (optional)
+Tests can run on multiple simulators:
 
-Configure in `playwright.config.ts` to adjust browsers.
+```bash
+# Run on multiple devices
+xcodebuild test \
+  -scheme MyAppUITests \
+  -destination 'platform=iOS Simulator,name=iPhone 16' \
+  -destination 'platform=iOS Simulator,name=iPad Pro 13-inch (M4)'
+
+# Run on specific iOS version
+xcodebuild test \
+  -scheme MyAppUITests \
+  -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.0'
+```
 
 ## CI/CD Integration
 
 Add to your CI pipeline:
 
 ```yaml
-# .github/workflows/e2e.yml
-- name: Install Playwright
-  run: npx playwright install --with-deps
+# .github/workflows/ui-tests.yml
+- name: Run UI Tests
+  run: |
+    xcodebuild test \
+      -scheme MyAppUITests \
+      -destination 'platform=iOS Simulator,name=iPhone 16' \
+      -resultBundlePath TestResults.xcresult \
+      2>&1 | xcbeautify
 
-- name: Run E2E tests
-  run: npx playwright test
-
-- name: Upload artifacts
+- name: Upload Test Results
   if: always()
   uses: actions/upload-artifact@v3
   with:
-    name: playwright-report
-    path: playwright-report/
+    name: test-results
+    path: TestResults.xcresult
 ```
 
-## PMX-Specific Critical Flows
+## Critical Flows to Test
 
-For PMX, prioritize these E2E tests:
+Prioritize these E2E tests for iOS apps:
 
-**🔴 CRITICAL (Must Always Pass):**
-1. User can connect wallet
-2. User can browse markets
-3. User can search markets (semantic search)
-4. User can view market details
-5. User can place trade (with test funds)
-6. Market resolves correctly
-7. User can withdraw funds
+**CRITICAL (Must Always Pass):**
+1. User can complete onboarding
+2. User can sign in / sign up
+3. User can view main content
+4. User can perform primary action
+5. User can access settings
+6. User can sign out
+7. Deep links work correctly
 
-**🟡 IMPORTANT:**
-1. Market creation flow
-2. User profile updates
-3. Real-time price updates
-4. Chart rendering
-5. Filter and sort markets
-6. Mobile responsive layout
+**IMPORTANT:**
+1. Push notification handling
+2. Background refresh
+3. Offline mode behavior
+4. Accessibility features work
+5. Dynamic Type support
+6. Dark mode appearance
 
 ## Best Practices
 
 **DO:**
-- ✅ Use Page Object Model for maintainability
-- ✅ Use data-testid attributes for selectors
-- ✅ Wait for API responses, not arbitrary timeouts
+- ✅ Use Page Object pattern for maintainability
+- ✅ Use accessibility identifiers for selectors
+- ✅ Wait for elements explicitly, not arbitrary delays
 - ✅ Test critical user journeys end-to-end
 - ✅ Run tests before merging to main
 - ✅ Review artifacts when tests fail
+- ✅ Use `XCTAttachment` for screenshots
 
 **DON'T:**
-- ❌ Use brittle selectors (CSS classes can change)
+- ❌ Use sleep() for timing (use waitForExistence)
 - ❌ Test implementation details
-- ❌ Run tests against production
+- ❌ Run tests against production APIs
 - ❌ Ignore flaky tests
-- ❌ Skip artifact review on failures
 - ❌ Test every edge case with E2E (use unit tests)
+- ❌ Hard-code test data
 
-## Important Notes
+## XCUITest Quick Reference
 
-**CRITICAL for PMX:**
-- E2E tests involving real money MUST run on testnet/staging only
-- Never run trading tests against production
-- Set `test.skip(process.env.NODE_ENV === 'production')` for financial tests
-- Use test wallets with small test funds only
+```swift
+// Finding elements
+app.buttons["identifier"]
+app.staticTexts["Label"]
+app.textFields["placeholder"]
+app.cells.containing(.staticText, identifier: "text")
+
+// Waiting
+element.waitForExistence(timeout: 5)
+let predicate = NSPredicate(format: "exists == true")
+expectation(for: predicate, evaluatedWith: element)
+
+// Interactions
+element.tap()
+element.doubleTap()
+element.swipeUp()
+element.typeText("text")
+
+// Assertions
+XCTAssertTrue(element.exists)
+XCTAssertEqual(element.label, "expected")
+XCTAssertTrue(element.isHittable)
+
+// Screenshots
+let screenshot = XCTAttachment(screenshot: app.screenshot())
+screenshot.lifetime = .keepAlways
+add(screenshot)
+```
 
 ## Integration with Other Commands
 
@@ -343,21 +500,19 @@ This command invokes the `e2e-runner` agent located at:
 ## Quick Commands
 
 ```bash
-# Run all E2E tests
-npx playwright test
+# Run all UI tests
+xcodebuild test -scheme MyAppUITests -destination 'platform=iOS Simulator,name=iPhone 16'
 
 # Run specific test file
-npx playwright test tests/e2e/markets/search.spec.ts
+xcodebuild test -scheme MyAppUITests -only-testing:MyAppUITests/PortfolioCreationTests
 
-# Run in headed mode (see browser)
-npx playwright test --headed
+# Run with recording (for debugging)
+xcodebuild test -scheme MyAppUITests -destination 'platform=iOS Simulator,name=iPhone 16' \
+  -enableScreenRecording YES
+
+# Generate test plan
+# Xcode > Product > Test Plan > New Test Plan
 
 # Debug test
-npx playwright test --debug
-
-# Generate test code
-npx playwright codegen http://localhost:3000
-
-# View report
-npx playwright show-report
+# Xcode > Product > Test (with breakpoints set)
 ```

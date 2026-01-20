@@ -1,8 +1,15 @@
-# Everything Claude Code
+# Everything Claude Code (iOS Edition)
 
-**The complete collection of Claude Code configs from an Anthropic hackathon winner.**
+**The complete collection of Claude Code configs for iOS development.**
 
-This repo contains production-ready agents, skills, hooks, commands, rules, and MCP configurations that I use daily with Claude Code. These configs evolved over 10+ months of intensive use building real products.
+This repo contains production-ready agents, skills, hooks, commands, rules, and MCP configurations optimized for iOS development with Swift, SwiftUI, and Xcode.
+
+**Target Stack:**
+- iOS 18+, Swift 6.2
+- SwiftUI with View-ViewModel pattern
+- SwiftData for persistence
+- Swift Testing framework
+- Clean Architecture + Modular Architecture
 
 ---
 
@@ -35,57 +42,56 @@ The guide explains:
 everything-claude-code/
 |-- agents/           # Specialized subagents for delegation
 |   |-- planner.md           # Feature implementation planning
-|   |-- architect.md         # System design decisions
-|   |-- tdd-guide.md         # Test-driven development
-|   |-- code-reviewer.md     # Quality and security review
-|   |-- security-reviewer.md # Vulnerability analysis
-|   |-- build-error-resolver.md
-|   |-- e2e-runner.md        # Playwright E2E testing
-|   |-- refactor-cleaner.md  # Dead code cleanup
+|   |-- architect.md         # iOS system design decisions
+|   |-- tdd-guide.md         # Swift Testing TDD workflow
+|   |-- code-reviewer.md     # Swift/SwiftUI code review
+|   |-- security-reviewer.md # iOS security analysis
+|   |-- build-error-resolver.md  # xcodebuild/SPM errors
+|   |-- e2e-runner.md        # XCUITest E2E testing
+|   |-- refactor-cleaner.md  # Swift dead code cleanup
 |   |-- doc-updater.md       # Documentation sync
 |
 |-- skills/           # Workflow definitions and domain knowledge
-|   |-- coding-standards.md         # Language best practices
-|   |-- backend-patterns.md         # API, database, caching patterns
-|   |-- frontend-patterns.md        # React, Next.js patterns
-|   |-- project-guidelines-example.md # Example project-specific skill
-|   |-- tdd-workflow/               # TDD methodology
-|   |-- security-review/            # Security checklist
-|   |-- clickhouse-io.md            # ClickHouse analytics
+|   |-- swift-coding-standards.md  # Swift API Guidelines
+|   |-- swift-concurrency.md       # async/await, Actor, Sendable
+|   |-- swiftui-patterns.md        # iOS 18+ SwiftUI patterns
+|   |-- swiftdata.md               # #Predicate, ModelActor
+|   |-- xcode-project.md           # Workspace, SPM, targets
+|   |-- ios-architecture.md        # Clean + Modular Architecture
+|   |-- project-guidelines-example.md  # Example project skill
+|   |-- tdd-workflow/              # TDD methodology
+|   |-- security-review/           # iOS security checklist
 |
 |-- commands/         # Slash commands for quick execution
-|   |-- tdd.md              # /tdd - Test-driven development
+|   |-- tdd.md              # /tdd - Swift Testing TDD
 |   |-- plan.md             # /plan - Implementation planning
-|   |-- e2e.md              # /e2e - E2E test generation
-|   |-- code-review.md      # /code-review - Quality review
-|   |-- build-fix.md        # /build-fix - Fix build errors
-|   |-- refactor-clean.md   # /refactor-clean - Dead code removal
-|   |-- test-coverage.md    # /test-coverage - Coverage analysis
-|   |-- update-codemaps.md  # /update-codemaps - Refresh docs
+|   |-- e2e.md              # /e2e - XCUITest generation
+|   |-- code-review.md      # /code-review - Swift review
+|   |-- build-fix.md        # /build-fix - xcodebuild errors
+|   |-- refactor-clean.md   # /refactor-clean - Periphery cleanup
+|   |-- test-coverage.md    # /test-coverage - xccov analysis
+|   |-- update-codemaps.md  # /update-codemaps - Module docs
 |   |-- update-docs.md      # /update-docs - Sync documentation
 |
 |-- rules/            # Always-follow guidelines
-|   |-- security.md         # Mandatory security checks
-|   |-- coding-style.md     # Immutability, file organization
-|   |-- testing.md          # TDD, 80% coverage requirement
+|   |-- security.md         # Keychain, ATS, Data Protection
+|   |-- coding-style.md     # Swift immutability, Codable
+|   |-- testing.md          # Swift Testing, 80% coverage
 |   |-- git-workflow.md     # Commit format, PR process
 |   |-- agents.md           # When to delegate to subagents
-|   |-- performance.md      # Model selection, context management
-|   |-- patterns.md         # API response formats, hooks
+|   |-- performance.md      # SwiftUI optimization
+|   |-- patterns.md         # View-ViewModel, Repository
 |   |-- hooks.md            # Hook documentation
 |
 |-- hooks/            # Trigger-based automations
-|   |-- hooks.json          # PreToolUse, PostToolUse, Stop hooks
+|   |-- hooks.json          # SwiftFormat, SwiftLint hooks
 |
 |-- mcp-configs/      # MCP server configurations
-|   |-- mcp-servers.json    # GitHub, Supabase, Vercel, Railway, etc.
-|
-|-- plugins/          # Plugin ecosystem documentation
-|   |-- README.md           # Plugins, marketplaces, skills guide
+|   |-- mcp-servers.json    # GitHub, memory, filesystem
 |
 |-- examples/         # Example configurations
     |-- CLAUDE.md           # Example project-level config
-    |-- user-CLAUDE.md      # Example user-level config (~/.claude/CLAUDE.md)
+    |-- user-CLAUDE.md      # Example user-level config
     |-- statusline.json     # Custom status line config
 ```
 
@@ -137,12 +143,12 @@ Subagents handle delegated tasks with limited scope. Example:
 ```markdown
 ---
 name: code-reviewer
-description: Reviews code for quality, security, and maintainability
+description: Reviews Swift code for quality, security, and SwiftUI patterns
 tools: Read, Grep, Glob, Bash
 model: opus
 ---
 
-You are a senior code reviewer...
+You are a senior iOS code reviewer...
 ```
 
 ### Skills
@@ -150,25 +156,25 @@ You are a senior code reviewer...
 Skills are workflow definitions invoked by commands or agents:
 
 ```markdown
-# TDD Workflow
+# TDD Workflow (Swift Testing)
 
-1. Define interfaces first
-2. Write failing tests (RED)
+1. Define protocols first
+2. Write failing tests with @Test (RED)
 3. Implement minimal code (GREEN)
 4. Refactor (IMPROVE)
-5. Verify 80%+ coverage
+5. Verify 80%+ coverage with xccov
 ```
 
 ### Hooks
 
-Hooks fire on tool events. Example - warn about console.log:
+Hooks fire on tool events. Example - warn about print():
 
 ```json
 {
-  "matcher": "tool == \"Edit\" && tool_input.file_path matches \"\\\\.(ts|tsx|js|jsx)$\"",
+  "matcher": "tool == \"Edit\" && tool_input.file_path matches \"\\\\.swift$\"",
   "hooks": [{
     "type": "command",
-    "command": "#!/bin/bash\ngrep -n 'console\\.log' \"$file_path\" && echo '[Hook] Remove console.log' >&2"
+    "command": "#!/bin/bash\ngrep -n 'print(' \"$file_path\" && echo '[Hook] Remove print()' >&2"
   }]
 }
 ```
@@ -179,10 +185,48 @@ Rules are always-follow guidelines. Keep them modular:
 
 ```
 ~/.claude/rules/
-  security.md      # No hardcoded secrets
-  coding-style.md  # Immutability, file limits
-  testing.md       # TDD, coverage requirements
+  security.md      # Keychain for secrets, ATS enabled
+  coding-style.md  # let over var, no force unwrap
+  testing.md       # Swift Testing, coverage requirements
 ```
+
+---
+
+## iOS-Specific Patterns
+
+### View-ViewModel Pattern
+
+```swift
+struct HomeView: View {
+    @State private var viewModel = ViewModel()
+    var body: some View { /* ... */ }
+}
+
+extension HomeView {
+    @Observable @MainActor
+    final class ViewModel {
+        // State and actions
+    }
+}
+```
+
+### Clean Architecture Layers
+
+```
+UI Layer (SwiftUI Views, ViewModels)
+    |
+Domain Layer (Use Cases, Entities, Repository Protocols)
+    |
+Data Layer (Repository Implementations, Network, SwiftData)
+```
+
+### Key Principles
+
+1. **Pure Functions** - minimize side effects
+2. **No Forced Unwrap (!)** - except compile-time guaranteed values
+3. **Stateless Views** - all state in ViewModel
+4. **TDD** - write tests first
+5. **80% coverage** minimum
 
 ---
 
@@ -200,11 +244,11 @@ Please contribute! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ### Ideas for Contributions
 
-- Language-specific skills (Python, Go, Rust patterns)
-- Framework-specific configs (Django, Rails, Laravel)
-- DevOps agents (Kubernetes, Terraform, AWS)
-- Testing strategies (different frameworks)
-- Domain-specific knowledge (ML, data engineering, mobile)
+- Additional SwiftUI patterns
+- watchOS/tvOS/visionOS specific configs
+- CI/CD configurations (Xcode Cloud, Fastlane)
+- Advanced Swift Testing strategies
+- SwiftData migration patterns
 
 ---
 

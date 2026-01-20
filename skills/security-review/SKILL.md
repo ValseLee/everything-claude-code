@@ -1,494 +1,652 @@
 ---
 name: security-review
-description: Use this skill when adding authentication, handling user input, working with secrets, creating API endpoints, or implementing payment/sensitive features. Provides comprehensive security checklist and patterns.
+description: Use this skill when handling authentication, user data, secrets, network communication, or implementing sensitive features. Provides comprehensive iOS security checklist and patterns.
 ---
 
-# Security Review Skill
+# iOS Security Review
 
-This skill ensures all code follows security best practices and identifies potential vulnerabilities.
+This skill ensures all iOS code follows security best practices and identifies potential vulnerabilities.
 
 ## When to Activate
 
 - Implementing authentication or authorization
-- Handling user input or file uploads
-- Creating new API endpoints
-- Working with secrets or credentials
-- Implementing payment features
-- Storing or transmitting sensitive data
-- Integrating third-party APIs
+- Storing sensitive data (tokens, credentials, user data)
+- Making network requests
+- Handling user input
+- Implementing biometric authentication
+- Working with Keychain
+- Processing payments or sensitive transactions
 
 ## Security Checklist
 
 ### 1. Secrets Management
 
-#### ❌ NEVER Do This
-```typescript
-const apiKey = "sk-proj-xxxxx"  // Hardcoded secret
-const dbPassword = "password123" // In source code
+#### ❌ NEVER Hardcode Secrets
+```swift
+// DANGEROUS - Hardcoded secrets
+let apiKey = "sk-proj-xxxxx"
+let secretToken = "abc123secret"
 ```
 
-#### ✅ ALWAYS Do This
-```typescript
-const apiKey = process.env.OPENAI_API_KEY
-const dbUrl = process.env.DATABASE_URL
-
-// Verify secrets exist
-if (!apiKey) {
-  throw new Error('OPENAI_API_KEY not configured')
+#### ✅ Use Configuration Files (Not in Git)
+```swift
+// Config.swift (gitignored)
+enum Config {
+    static let apiKey: String = {
+        guard let key = Bundle.main.object(forInfoDictionaryKey: "API_KEY") as? String else {
+            fatalError("API_KEY not configured")
+        }
+        return key
+    }()
 }
+
+// In Info.plist: API_KEY = $(API_KEY)
+// Set in Xcode scheme or xcconfig
+```
+
+#### ✅ Use Keychain for Runtime Secrets
+```swift
+// Store secret securely
+try KeychainManager.save(key: "authToken", value: token)
+
+// Retrieve secret
+let token = try KeychainManager.retrieve(key: "authToken")
 ```
 
 #### Verification Steps
-- [ ] No hardcoded API keys, tokens, or passwords
-- [ ] All secrets in environment variables
-- [ ] `.env.local` in .gitignore
+- [ ] No hardcoded API keys, tokens, or passwords in source
+- [ ] Secrets in xcconfig files (gitignored)
+- [ ] Runtime secrets stored in Keychain
 - [ ] No secrets in git history
-- [ ] Production secrets in hosting platform (Vercel, Railway)
+- [ ] Info.plist values populated at build time
 
-### 2. Input Validation
+### 2. Keychain Usage
 
-#### Always Validate User Input
-```typescript
-import { z } from 'zod'
+#### Secure Keychain Manager
+```swift
+import Security
 
-// Define validation schema
-const CreateUserSchema = z.object({
-  email: z.string().email(),
-  name: z.string().min(1).max(100),
-  age: z.number().int().min(0).max(150)
-})
+enum KeychainError: Error {
+    case itemNotFound
+    case duplicateItem
+    case unexpectedStatus(OSStatus)
+}
 
-// Validate before processing
-export async function createUser(input: unknown) {
-  try {
-    const validated = CreateUserSchema.parse(input)
-    return await db.users.create(validated)
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return { success: false, errors: error.errors }
+final class KeychainManager {
+
+    static func save(key: String, value: String) throws {
+        guard let data = value.data(using: .utf8) else {
+            throw KeychainError.unexpectedStatus(errSecParam)
+        }
+
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: key,
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        ]
+
+        // Delete existing item first
+        SecItemDelete(query as CFDictionary)
+
+        let status = SecItemAdd(query as CFDictionary, nil)
+
+        guard status == errSecSuccess else {
+            throw KeychainError.unexpectedStatus(status)
+        }
     }
-    throw error
-  }
+
+    static func retrieve(key: String) throws -> String {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: key,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+
+        guard status == errSecSuccess,
+              let data = result as? Data,
+              let value = String(data: data, encoding: .utf8) else {
+            throw KeychainError.itemNotFound
+        }
+
+        return value
+    }
+
+    static func delete(key: String) throws {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: key
+        ]
+
+        let status = SecItemDelete(query as CFDictionary)
+
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw KeychainError.unexpectedStatus(status)
+        }
+    }
 }
 ```
 
-#### File Upload Validation
-```typescript
-function validateFileUpload(file: File) {
-  // Size check (5MB max)
-  const maxSize = 5 * 1024 * 1024
-  if (file.size > maxSize) {
-    throw new Error('File too large (max 5MB)')
-  }
+#### Keychain Access Levels
+```swift
+// Choose appropriate accessibility:
 
-  // Type check
-  const allowedTypes = ['image/jpeg', 'image/png', 'image/gif']
-  if (!allowedTypes.includes(file.type)) {
-    throw new Error('Invalid file type')
-  }
+// After first unlock, device only (RECOMMENDED for most cases)
+kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
 
-  // Extension check
-  const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif']
-  const extension = file.name.toLowerCase().match(/\.[^.]+$/)?.[0]
-  if (!extension || !allowedExtensions.includes(extension)) {
-    throw new Error('Invalid file extension')
-  }
+// When unlocked only (more secure, less convenient)
+kSecAttrAccessibleWhenUnlockedThisDeviceOnly
 
-  return true
-}
-```
+// Always accessible (avoid - security risk)
+kSecAttrAccessibleAlways  // ❌ AVOID
 
-#### Verification Steps
-- [ ] All user inputs validated with schemas
-- [ ] File uploads restricted (size, type, extension)
-- [ ] No direct use of user input in queries
-- [ ] Whitelist validation (not blacklist)
-- [ ] Error messages don't leak sensitive info
-
-### 3. SQL Injection Prevention
-
-#### ❌ NEVER Concatenate SQL
-```typescript
-// DANGEROUS - SQL Injection vulnerability
-const query = `SELECT * FROM users WHERE email = '${userEmail}'`
-await db.query(query)
-```
-
-#### ✅ ALWAYS Use Parameterized Queries
-```typescript
-// Safe - parameterized query
-const { data } = await supabase
-  .from('users')
-  .select('*')
-  .eq('email', userEmail)
-
-// Or with raw SQL
-await db.query(
-  'SELECT * FROM users WHERE email = $1',
-  [userEmail]
+// With biometric protection
+kSecAttrAccessControl: SecAccessControlCreateWithFlags(
+    nil,
+    kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly,
+    .biometryCurrentSet,
+    nil
 )
 ```
 
 #### Verification Steps
-- [ ] All database queries use parameterized queries
-- [ ] No string concatenation in SQL
-- [ ] ORM/query builder used correctly
-- [ ] Supabase queries properly sanitized
+- [ ] Sensitive data stored in Keychain (not UserDefaults)
+- [ ] Appropriate accessibility level chosen
+- [ ] ThisDeviceOnly flag used (prevents iCloud sync)
+- [ ] Biometric protection for high-security items
+- [ ] Error handling for Keychain operations
 
-### 4. Authentication & Authorization
+### 3. App Transport Security (ATS)
 
-#### JWT Token Handling
-```typescript
-// ❌ WRONG: localStorage (vulnerable to XSS)
-localStorage.setItem('token', token)
-
-// ✅ CORRECT: httpOnly cookies
-res.setHeader('Set-Cookie',
-  `token=${token}; HttpOnly; Secure; SameSite=Strict; Max-Age=3600`)
+#### Default ATS (Recommended)
+```xml
+<!-- Info.plist - Default is secure, no changes needed -->
+<!-- ATS enforces HTTPS by default -->
 ```
 
-#### Authorization Checks
-```typescript
-export async function deleteUser(userId: string, requesterId: string) {
-  // ALWAYS verify authorization first
-  const requester = await db.users.findUnique({
-    where: { id: requesterId }
-  })
-
-  if (requester.role !== 'admin') {
-    return NextResponse.json(
-      { error: 'Unauthorized' },
-      { status: 403 }
-    )
-  }
-
-  // Proceed with deletion
-  await db.users.delete({ where: { id: userId } })
-}
+#### Exception for Specific Domain (If Required)
+```xml
+<!-- Info.plist - Only if absolutely necessary -->
+<key>NSAppTransportSecurity</key>
+<dict>
+    <key>NSExceptionDomains</key>
+    <dict>
+        <key>legacy-api.example.com</key>
+        <dict>
+            <key>NSTemporaryExceptionAllowsInsecureHTTPLoads</key>
+            <true/>
+            <key>NSTemporaryExceptionMinimumTLSVersion</key>
+            <string>TLSv1.2</string>
+        </dict>
+    </dict>
+</dict>
 ```
 
-#### Row Level Security (Supabase)
-```sql
--- Enable RLS on all tables
-ALTER TABLE users ENABLE ROW LEVEL SECURITY;
-
--- Users can only view their own data
-CREATE POLICY "Users view own data"
-  ON users FOR SELECT
-  USING (auth.uid() = id);
-
--- Users can only update their own data
-CREATE POLICY "Users update own data"
-  ON users FOR UPDATE
-  USING (auth.uid() = id);
+#### ❌ NEVER Disable ATS Globally
+```xml
+<!-- DANGEROUS - Never do this in production -->
+<key>NSAppTransportSecurity</key>
+<dict>
+    <key>NSAllowsArbitraryLoads</key>
+    <true/>  <!-- ❌ NEVER -->
+</dict>
 ```
 
 #### Verification Steps
-- [ ] Tokens stored in httpOnly cookies (not localStorage)
-- [ ] Authorization checks before sensitive operations
-- [ ] Row Level Security enabled in Supabase
-- [ ] Role-based access control implemented
-- [ ] Session management secure
+- [ ] ATS enabled (default)
+- [ ] No NSAllowsArbitraryLoads = true
+- [ ] Exceptions documented and justified
+- [ ] TLS 1.2+ required
+- [ ] Certificate validation not bypassed
 
-### 5. XSS Prevention
+### 4. Data Protection
 
-#### Sanitize HTML
-```typescript
-import DOMPurify from 'isomorphic-dompurify'
+#### File Protection Levels
+```swift
+// Write file with protection
+let data = sensitiveData
+let url = documentsDirectory.appendingPathComponent("sensitive.dat")
 
-// ALWAYS sanitize user-provided HTML
-function renderUserContent(html: string) {
-  const clean = DOMPurify.sanitize(html, {
-    ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'p'],
-    ALLOWED_ATTR: []
-  })
-  return <div dangerouslySetInnerHTML={{ __html: clean }} />
+try data.write(
+    to: url,
+    options: [.completeFileProtection]  // Encrypted when locked
+)
+
+// Protection levels:
+// .completeFileProtection - Encrypted when device locked (MOST SECURE)
+// .completeFileProtectionUnlessOpen - Encrypted unless file is open
+// .completeFileProtectionUntilFirstUserAuthentication - Encrypted until first unlock
+// .noFileProtection - No encryption (AVOID for sensitive data)
+```
+
+#### Core Data Protection
+```swift
+let container = NSPersistentContainer(name: "Model")
+
+// Add file protection
+let storeDescription = container.persistentStoreDescriptions.first
+storeDescription?.setOption(
+    FileProtectionType.complete as NSObject,
+    forKey: NSPersistentStoreFileProtectionKey
+)
+```
+
+#### SwiftData Protection
+```swift
+let schema = Schema([User.self, Order.self])
+let config = ModelConfiguration(
+    schema: schema,
+    url: storeURL,
+    cloudKitDatabase: .none  // Disable CloudKit for sensitive data
+)
+
+// Note: SwiftData uses SQLite which respects file protection
+// Set file protection on the store directory
+```
+
+#### Verification Steps
+- [ ] Sensitive files use .completeFileProtection
+- [ ] Database files are encrypted
+- [ ] Temporary files cleaned up
+- [ ] Cache contains no sensitive data
+- [ ] CloudKit sync disabled for sensitive data
+
+### 5. Secure Network Communication
+
+#### URLSession with Certificate Pinning
+```swift
+final class PinnedSessionDelegate: NSObject, URLSessionDelegate {
+    private let pinnedCertificates: [SecCertificate]
+
+    init(certificates: [SecCertificate]) {
+        self.pinnedCertificates = certificates
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        didReceive challenge: URLAuthenticationChallenge
+    ) async -> (URLSession.AuthChallengeDisposition, URLCredential?) {
+
+        guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+              let serverTrust = challenge.protectionSpace.serverTrust else {
+            return (.cancelAuthenticationChallenge, nil)
+        }
+
+        // Evaluate server trust
+        let policy = SecPolicyCreateSSL(true, challenge.protectionSpace.host as CFString)
+        SecTrustSetPolicies(serverTrust, policy)
+
+        var error: CFError?
+        guard SecTrustEvaluateWithError(serverTrust, &error) else {
+            return (.cancelAuthenticationChallenge, nil)
+        }
+
+        // Verify certificate is pinned
+        guard let serverCertificate = SecTrustGetCertificateAtIndex(serverTrust, 0),
+              pinnedCertificates.contains(where: {
+                  CFEqual($0, serverCertificate)
+              }) else {
+            return (.cancelAuthenticationChallenge, nil)
+        }
+
+        return (.useCredential, URLCredential(trust: serverTrust))
+    }
 }
 ```
 
-#### Content Security Policy
-```typescript
-// next.config.js
-const securityHeaders = [
-  {
-    key: 'Content-Security-Policy',
-    value: `
-      default-src 'self';
-      script-src 'self' 'unsafe-eval' 'unsafe-inline';
-      style-src 'self' 'unsafe-inline';
-      img-src 'self' data: https:;
-      font-src 'self';
-      connect-src 'self' https://api.example.com;
-    `.replace(/\s{2,}/g, ' ').trim()
-  }
+#### Secure Request Headers
+```swift
+func makeAuthenticatedRequest(to url: URL) async throws -> Data {
+    var request = URLRequest(url: url)
+    request.httpMethod = "GET"
+
+    // Add authentication
+    let token = try KeychainManager.retrieve(key: "authToken")
+    request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+    // Security headers
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
+
+    let (data, response) = try await URLSession.shared.data(for: request)
+
+    guard let httpResponse = response as? HTTPURLResponse,
+          200..<300 ~= httpResponse.statusCode else {
+        throw NetworkError.requestFailed
+    }
+
+    return data
+}
+```
+
+#### Verification Steps
+- [ ] HTTPS used for all requests
+- [ ] Certificate pinning for sensitive APIs
+- [ ] Authentication tokens not logged
+- [ ] Request/response not cached for sensitive data
+- [ ] Timeout configured appropriately
+
+### 6. Biometric Authentication
+
+#### Face ID / Touch ID
+```swift
+import LocalAuthentication
+
+final class BiometricAuthManager {
+
+    enum BiometricError: Error {
+        case notAvailable
+        case notEnrolled
+        case authenticationFailed
+        case cancelled
+    }
+
+    func authenticate(reason: String) async throws {
+        let context = LAContext()
+        var error: NSError?
+
+        guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) else {
+            if let error {
+                throw mapError(error)
+            }
+            throw BiometricError.notAvailable
+        }
+
+        do {
+            let success = try await context.evaluatePolicy(
+                .deviceOwnerAuthenticationWithBiometrics,
+                localizedReason: reason
+            )
+
+            guard success else {
+                throw BiometricError.authenticationFailed
+            }
+        } catch let error as LAError {
+            throw mapLAError(error)
+        }
+    }
+
+    private func mapLAError(_ error: LAError) -> BiometricError {
+        switch error.code {
+        case .biometryNotAvailable:
+            return .notAvailable
+        case .biometryNotEnrolled:
+            return .notEnrolled
+        case .userCancel, .appCancel:
+            return .cancelled
+        default:
+            return .authenticationFailed
+        }
+    }
+}
+```
+
+#### Info.plist Required Keys
+```xml
+<key>NSFaceIDUsageDescription</key>
+<string>Authenticate to access your account</string>
+```
+
+#### Verification Steps
+- [ ] Biometric used as second factor, not sole authentication
+- [ ] Fallback to passcode available
+- [ ] NSFaceIDUsageDescription provided
+- [ ] Graceful handling of unavailable biometrics
+- [ ] Context invalidated after use
+
+### 7. Input Validation
+
+#### User Input Sanitization
+```swift
+// ✅ GOOD: Validate and sanitize input
+struct UserInput {
+    let email: String
+    let name: String
+
+    init(email: String, name: String) throws {
+        // Email validation
+        let emailRegex = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/
+        guard email.wholeMatch(of: emailRegex) != nil else {
+            throw ValidationError.invalidEmail
+        }
+
+        // Name validation
+        let sanitizedName = name
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .prefix(100)
+
+        guard !sanitizedName.isEmpty else {
+            throw ValidationError.emptyName
+        }
+
+        self.email = email
+        self.name = String(sanitizedName)
+    }
+}
+```
+
+#### Prevent Injection in URL Construction
+```swift
+// ❌ BAD: String interpolation
+let url = URL(string: "https://api.example.com/users/\(userId)")!
+
+// ✅ GOOD: URLComponents
+var components = URLComponents(string: "https://api.example.com/users")!
+components.path.append("/\(userId)")
+
+// For query parameters
+components.queryItems = [
+    URLQueryItem(name: "filter", value: userInput)  // Auto-escaped
 ]
-```
 
-#### Verification Steps
-- [ ] User-provided HTML sanitized
-- [ ] CSP headers configured
-- [ ] No unvalidated dynamic content rendering
-- [ ] React's built-in XSS protection used
-
-### 6. CSRF Protection
-
-#### CSRF Tokens
-```typescript
-import { csrf } from '@/lib/csrf'
-
-export async function POST(request: Request) {
-  const token = request.headers.get('X-CSRF-Token')
-
-  if (!csrf.verify(token)) {
-    return NextResponse.json(
-      { error: 'Invalid CSRF token' },
-      { status: 403 }
-    )
-  }
-
-  // Process request
-}
-```
-
-#### SameSite Cookies
-```typescript
-res.setHeader('Set-Cookie',
-  `session=${sessionId}; HttpOnly; Secure; SameSite=Strict`)
-```
-
-#### Verification Steps
-- [ ] CSRF tokens on state-changing operations
-- [ ] SameSite=Strict on all cookies
-- [ ] Double-submit cookie pattern implemented
-
-### 7. Rate Limiting
-
-#### API Rate Limiting
-```typescript
-import rateLimit from 'express-rate-limit'
-
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // 100 requests per window
-  message: 'Too many requests'
-})
-
-// Apply to routes
-app.use('/api/', limiter)
-```
-
-#### Expensive Operations
-```typescript
-// Aggressive rate limiting for searches
-const searchLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 10, // 10 requests per minute
-  message: 'Too many search requests'
-})
-
-app.use('/api/search', searchLimiter)
-```
-
-#### Verification Steps
-- [ ] Rate limiting on all API endpoints
-- [ ] Stricter limits on expensive operations
-- [ ] IP-based rate limiting
-- [ ] User-based rate limiting (authenticated)
-
-### 8. Sensitive Data Exposure
-
-#### Logging
-```typescript
-// ❌ WRONG: Logging sensitive data
-console.log('User login:', { email, password })
-console.log('Payment:', { cardNumber, cvv })
-
-// ✅ CORRECT: Redact sensitive data
-console.log('User login:', { email, userId })
-console.log('Payment:', { last4: card.last4, userId })
-```
-
-#### Error Messages
-```typescript
-// ❌ WRONG: Exposing internal details
-catch (error) {
-  return NextResponse.json(
-    { error: error.message, stack: error.stack },
-    { status: 500 }
-  )
-}
-
-// ✅ CORRECT: Generic error messages
-catch (error) {
-  console.error('Internal error:', error)
-  return NextResponse.json(
-    { error: 'An error occurred. Please try again.' },
-    { status: 500 }
-  )
+guard let url = components.url else {
+    throw URLError.invalidURL
 }
 ```
 
 #### Verification Steps
-- [ ] No passwords, tokens, or secrets in logs
-- [ ] Error messages generic for users
-- [ ] Detailed errors only in server logs
-- [ ] No stack traces exposed to users
+- [ ] All user inputs validated before use
+- [ ] Length limits enforced
+- [ ] Special characters sanitized
+- [ ] URL parameters properly encoded
+- [ ] No user input in format strings
 
-### 9. Blockchain Security (Solana)
+### 8. Secure Data in Memory
 
-#### Wallet Verification
-```typescript
-import { verify } from '@solana/web3.js'
+#### Clear Sensitive Data
+```swift
+// Clear sensitive string from memory
+func clearSensitiveString(_ string: inout String) {
+    string.withUTF8 { buffer in
+        guard let baseAddress = UnsafeMutableRawPointer(mutating: buffer.baseAddress) else {
+            return
+        }
+        memset(baseAddress, 0, buffer.count)
+    }
+    string = ""
+}
 
-async function verifyWalletOwnership(
-  publicKey: string,
-  signature: string,
-  message: string
-) {
-  try {
-    const isValid = verify(
-      Buffer.from(message),
-      Buffer.from(signature, 'base64'),
-      Buffer.from(publicKey, 'base64')
-    )
-    return isValid
-  } catch (error) {
-    return false
-  }
+// Clear Data
+func clearSensitiveData(_ data: inout Data) {
+    data.withUnsafeMutableBytes { buffer in
+        guard let baseAddress = buffer.baseAddress else { return }
+        memset(baseAddress, 0, buffer.count)
+    }
+    data = Data()
 }
 ```
 
-#### Transaction Verification
-```typescript
-async function verifyTransaction(transaction: Transaction) {
-  // Verify recipient
-  if (transaction.to !== expectedRecipient) {
-    throw new Error('Invalid recipient')
-  }
+#### Prevent Screenshots of Sensitive Content
+```swift
+// In SceneDelegate or SwiftUI App
+func sceneWillResignActive(_ scene: UIScene) {
+    // Add blur overlay when app goes to background
+    let blurView = UIVisualEffectView(effect: UIBlurEffect(style: .regular))
+    blurView.tag = 999
+    blurView.frame = window?.bounds ?? .zero
+    window?.addSubview(blurView)
+}
 
-  // Verify amount
-  if (transaction.amount > maxAmount) {
-    throw new Error('Amount exceeds limit')
-  }
-
-  // Verify user has sufficient balance
-  const balance = await getBalance(transaction.from)
-  if (balance < transaction.amount) {
-    throw new Error('Insufficient balance')
-  }
-
-  return true
+func sceneDidBecomeActive(_ scene: UIScene) {
+    // Remove blur overlay
+    window?.viewWithTag(999)?.removeFromSuperview()
 }
 ```
 
 #### Verification Steps
-- [ ] Wallet signatures verified
-- [ ] Transaction details validated
-- [ ] Balance checks before transactions
-- [ ] No blind transaction signing
+- [ ] Sensitive data cleared after use
+- [ ] Screenshots blocked for sensitive screens
+- [ ] No sensitive data in logs
+- [ ] Memory properly deallocated
 
-### 10. Dependency Security
+### 9. Jailbreak Detection
 
-#### Regular Updates
-```bash
-# Check for vulnerabilities
-npm audit
+#### Basic Jailbreak Detection
+```swift
+final class SecurityChecker {
 
-# Fix automatically fixable issues
-npm audit fix
+    static var isJailbroken: Bool {
+        #if targetEnvironment(simulator)
+        return false
+        #else
+        // Check for common jailbreak files
+        let jailbreakPaths = [
+            "/Applications/Cydia.app",
+            "/Library/MobileSubstrate/MobileSubstrate.dylib",
+            "/bin/bash",
+            "/usr/sbin/sshd",
+            "/etc/apt",
+            "/private/var/lib/apt/"
+        ]
 
-# Update dependencies
-npm update
+        for path in jailbreakPaths {
+            if FileManager.default.fileExists(atPath: path) {
+                return true
+            }
+        }
 
-# Check for outdated packages
-npm outdated
-```
+        // Check if app can write outside sandbox
+        let testPath = "/private/jailbreak_test.txt"
+        do {
+            try "test".write(toFile: testPath, atomically: true, encoding: .utf8)
+            try FileManager.default.removeItem(atPath: testPath)
+            return true
+        } catch {
+            // Cannot write - not jailbroken
+        }
 
-#### Lock Files
-```bash
-# ALWAYS commit lock files
-git add package-lock.json
+        // Check for suspicious URL schemes
+        if let url = URL(string: "cydia://"),
+           UIApplication.shared.canOpenURL(url) {
+            return true
+        }
 
-# Use in CI/CD for reproducible builds
-npm ci  # Instead of npm install
+        return false
+        #endif
+    }
+}
+
+// Usage
+if SecurityChecker.isJailbroken {
+    // Warn user or restrict functionality
+}
 ```
 
 #### Verification Steps
-- [ ] Dependencies up to date
-- [ ] No known vulnerabilities (npm audit clean)
-- [ ] Lock files committed
-- [ ] Dependabot enabled on GitHub
-- [ ] Regular security updates
+- [ ] Jailbreak detection implemented (if required)
+- [ ] Appropriate response to jailbreak
+- [ ] Detection not easily bypassed
+- [ ] Consider legitimate security research use
 
-## Security Testing
+### 10. Logging and Debugging
 
-### Automated Security Tests
-```typescript
-// Test authentication
-test('requires authentication', async () => {
-  const response = await fetch('/api/protected')
-  expect(response.status).toBe(401)
-})
+#### Safe Logging
+```swift
+import os
 
-// Test authorization
-test('requires admin role', async () => {
-  const response = await fetch('/api/admin', {
-    headers: { Authorization: `Bearer ${userToken}` }
-  })
-  expect(response.status).toBe(403)
-})
+final class SecureLogger {
+    private let logger: Logger
 
-// Test input validation
-test('rejects invalid input', async () => {
-  const response = await fetch('/api/users', {
-    method: 'POST',
-    body: JSON.stringify({ email: 'not-an-email' })
-  })
-  expect(response.status).toBe(400)
-})
+    init(subsystem: String, category: String) {
+        self.logger = Logger(subsystem: subsystem, category: category)
+    }
 
-// Test rate limiting
-test('enforces rate limits', async () => {
-  const requests = Array(101).fill(null).map(() =>
-    fetch('/api/endpoint')
-  )
+    func info(_ message: String) {
+        logger.info("\(message, privacy: .public)")
+    }
 
-  const responses = await Promise.all(requests)
-  const tooManyRequests = responses.filter(r => r.status === 429)
+    func error(_ message: String) {
+        logger.error("\(message, privacy: .public)")
+    }
 
-  expect(tooManyRequests.length).toBeGreaterThan(0)
-})
+    // Never log sensitive data
+    func debug(_ message: String, sensitiveValue: String) {
+        #if DEBUG
+        logger.debug("\(message): \(sensitiveValue, privacy: .private)")
+        #endif
+    }
+}
+
+// ❌ NEVER log sensitive data in production
+print("Token: \(authToken)")  // ❌
+logger.info("Password: \(password)")  // ❌
+
+// ✅ GOOD: Redact sensitive information
+logger.info("User authenticated: \(userId)")
+logger.info("Payment processed for last4: \(card.last4)")
 ```
 
-## Pre-Deployment Security Checklist
+#### Disable Debug Features in Release
+```swift
+#if DEBUG
+// Debug-only code
+func enableDebugFeatures() {
+    // ...
+}
+#endif
 
-Before ANY production deployment:
+// Or use compiler flags
+#if !RELEASE
+// Development features
+#endif
+```
 
-- [ ] **Secrets**: No hardcoded secrets, all in env vars
+#### Verification Steps
+- [ ] No sensitive data in logs
+- [ ] Debug code disabled in release
+- [ ] os.Logger used with privacy annotations
+- [ ] No print statements in production code
+- [ ] Crash reports don't contain sensitive data
+
+## Pre-Release Security Checklist
+
+Before ANY App Store submission:
+
+- [ ] **Secrets**: No hardcoded secrets in code
+- [ ] **Keychain**: Sensitive data stored securely
+- [ ] **ATS**: Enabled, no arbitrary loads
+- [ ] **Data Protection**: Files encrypted at rest
+- [ ] **Network**: HTTPS only, certificate pinning for sensitive APIs
 - [ ] **Input Validation**: All user inputs validated
-- [ ] **SQL Injection**: All queries parameterized
-- [ ] **XSS**: User content sanitized
-- [ ] **CSRF**: Protection enabled
-- [ ] **Authentication**: Proper token handling
-- [ ] **Authorization**: Role checks in place
-- [ ] **Rate Limiting**: Enabled on all endpoints
-- [ ] **HTTPS**: Enforced in production
-- [ ] **Security Headers**: CSP, X-Frame-Options configured
-- [ ] **Error Handling**: No sensitive data in errors
+- [ ] **Biometrics**: Proper fallback and error handling
+- [ ] **Memory**: Sensitive data cleared after use
 - [ ] **Logging**: No sensitive data logged
-- [ ] **Dependencies**: Up to date, no vulnerabilities
-- [ ] **Row Level Security**: Enabled in Supabase
-- [ ] **CORS**: Properly configured
-- [ ] **File Uploads**: Validated (size, type)
-- [ ] **Wallet Signatures**: Verified (if blockchain)
+- [ ] **Debug**: Debug features disabled in release
+- [ ] **Entitlements**: Minimal required entitlements
+- [ ] **Privacy**: Info.plist usage descriptions present
+- [ ] **Dependencies**: Up to date, no known vulnerabilities
 
 ## Resources
 
-- [OWASP Top 10](https://owasp.org/www-project-top-ten/)
-- [Next.js Security](https://nextjs.org/docs/security)
-- [Supabase Security](https://supabase.com/docs/guides/auth)
-- [Web Security Academy](https://portswigger.net/web-security)
+- [Apple Security Documentation](https://developer.apple.com/documentation/security)
+- [OWASP Mobile Security Guide](https://owasp.org/www-project-mobile-security/)
+- [Apple App Store Review Guidelines - Security](https://developer.apple.com/app-store/review/guidelines/#safety)
+- [iOS Security Guide](https://support.apple.com/guide/security/)
 
 ---
 
-**Remember**: Security is not optional. One vulnerability can compromise the entire platform. When in doubt, err on the side of caution.
+**Remember**: Security is not optional. One vulnerability can compromise user data and trust. When in doubt, err on the side of caution.

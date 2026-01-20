@@ -30,7 +30,7 @@ When creating PRs:
 
 2. **TDD Approach**
    - Use **tdd-guide** agent
-   - Write tests first (RED)
+   - Write tests first with Swift Testing (RED)
    - Implement to pass tests (GREEN)
    - Refactor (IMPROVE)
    - Verify 80%+ coverage
@@ -43,3 +43,14 @@ When creating PRs:
 4. **Commit & Push**
    - Detailed commit messages
    - Follow conventional commits format
+
+## iOS-Specific Considerations
+
+- Keep `.xcodeproj` and `.xcworkspace` files in sync
+- Commit `Package.resolved` for SPM dependencies
+- Don't commit derived data or build artifacts
+- Use `.gitignore` for:
+  - `DerivedData/`
+  - `*.xcuserstate`
+  - `.DS_Store`
+  - `Pods/` (if using CocoaPods)

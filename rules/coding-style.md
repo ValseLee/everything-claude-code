@@ -1,22 +1,46 @@
 # Coding Style
 
-## Immutability (CRITICAL)
+## Pure Functions (CRITICAL)
 
-ALWAYS create new objects, NEVER mutate:
+Minimize side effects and write predictable functions:
 
-```javascript
-// WRONG: Mutation
-function updateUser(user, name) {
-  user.name = name  // MUTATION!
-  return user
+```swift
+// ✅ GOOD: Pure Function
+func calculateTotal(items: [Item]) -> Decimal {
+    items.reduce(0) { $0 + $1.price }
 }
 
-// CORRECT: Immutability
-function updateUser(user, name) {
-  return {
-    ...user,
-    name
-  }
+func filterActiveUsers(from users: [User]) -> [User] {
+    users.filter { $0.isActive }
+}
+
+// ❌ BAD: Impure Function (Side Effects)
+var totalCount = 0  // External state
+
+func addToTotal(value: Int) {
+    totalCount += value  // Modifies external state
+    print("Added \(value)")  // I/O side effect
+}
+```
+
+## Immutability
+
+Prefer immutable data structures:
+
+```swift
+// ✅ GOOD: Immutable with let
+let user = User(name: "John", age: 30)
+let updatedUser = User(name: user.name, age: 31)  // New instance
+
+// ✅ GOOD: Value types (struct)
+struct User {
+    let id: UUID
+    var name: String  // var is OK in struct - copy semantics
+}
+
+// ❌ BAD: Mutating reference types
+class User {
+    var name: String  // Shared mutable state
 }
 ```
 
@@ -25,36 +49,81 @@ function updateUser(user, name) {
 MANY SMALL FILES > FEW LARGE FILES:
 - High cohesion, low coupling
 - 200-400 lines typical, 800 max
-- Extract utilities from large components
+- Extract utilities from large files
 - Organize by feature/domain, not by type
 
 ## Error Handling
 
 ALWAYS handle errors comprehensively:
 
-```typescript
-try {
-  const result = await riskyOperation()
-  return result
-} catch (error) {
-  console.error('Operation failed:', error)
-  throw new Error('Detailed user-friendly message')
+```swift
+// ✅ GOOD: Proper error handling
+do {
+    let result = try await riskyOperation()
+    return result
+} catch let error as NetworkError {
+    logger.error("Network error: \(error.localizedDescription)")
+    throw AppError.networkFailed(error)
+} catch {
+    logger.error("Unexpected error: \(error)")
+    throw AppError.unknown(error)
 }
+
+// ❌ BAD: Force try
+let result = try! riskyOperation()  // Crash risk!
 ```
 
 ## Input Validation
 
 ALWAYS validate user input:
 
-```typescript
-import { z } from 'zod'
+```swift
+// ✅ GOOD: Codable with validation
+struct UserInput: Codable {
+    let email: String
+    let age: Int
 
-const schema = z.object({
-  email: z.string().email(),
-  age: z.number().int().min(0).max(150)
-})
+    init(email: String, age: Int) throws {
+        guard email.contains("@") && email.contains(".") else {
+            throw ValidationError.invalidEmail
+        }
+        guard (0...150).contains(age) else {
+            throw ValidationError.invalidAge
+        }
+        self.email = email
+        self.age = age
+    }
+}
 
-const validated = schema.parse(input)
+// ✅ GOOD: Failable initializer
+struct Email {
+    let value: String
+
+    init?(_ value: String) {
+        guard value.contains("@") else { return nil }
+        self.value = value
+    }
+}
+```
+
+## Naming Conventions
+
+Follow Swift API Design Guidelines:
+
+```swift
+// Type names: UpperCamelCase
+struct UserProfile { }
+enum ConnectionState { }
+protocol DataProviding { }
+
+// Properties, methods, parameters: lowerCamelCase
+var userName: String
+func fetchUserData(for userId: String) async throws -> User
+
+// Boolean properties: is, has, can, should prefixes
+var isEmpty: Bool
+var hasUnsavedChanges: Bool
+var canSubmit: Bool
 ```
 
 ## Code Quality Checklist
@@ -65,6 +134,7 @@ Before marking work complete:
 - [ ] Files are focused (<800 lines)
 - [ ] No deep nesting (>4 levels)
 - [ ] Proper error handling
-- [ ] No console.log statements
+- [ ] No print statements in production
 - [ ] No hardcoded values
-- [ ] No mutation (immutable patterns used)
+- [ ] No forced unwrap (!) except compile-time guaranteed
+- [ ] Pure functions where possible

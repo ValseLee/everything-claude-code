@@ -1,15 +1,15 @@
 ---
-description: Enforce test-driven development workflow. Scaffold interfaces, generate tests FIRST, then implement minimal code to pass. Ensure 80%+ coverage.
+description: Enforce test-driven development workflow. Scaffold protocols, generate tests FIRST using Swift Testing, then implement minimal code to pass. Ensure 80%+ coverage.
 ---
 
 # TDD Command
 
-This command invokes the **tdd-guide** agent to enforce test-driven development methodology.
+This command invokes the **tdd-guide** agent to enforce test-driven development methodology for iOS/Swift projects.
 
 ## What This Command Does
 
-1. **Scaffold Interfaces** - Define types/interfaces first
-2. **Generate Tests First** - Write failing tests (RED)
+1. **Scaffold Protocols** - Define protocols/interfaces first
+2. **Generate Tests First** - Write failing tests (RED) using Swift Testing
 3. **Implement Minimal Code** - Write just enough to pass (GREEN)
 4. **Refactor** - Improve code while keeping tests green (REFACTOR)
 5. **Verify Coverage** - Ensure 80%+ test coverage
@@ -18,7 +18,7 @@ This command invokes the **tdd-guide** agent to enforce test-driven development 
 
 Use `/tdd` when:
 - Implementing new features
-- Adding new functions/components
+- Adding new functions/ViewModels/Services
 - Fixing bugs (write test that reproduces bug first)
 - Refactoring existing code
 - Building critical business logic
@@ -27,7 +27,7 @@ Use `/tdd` when:
 
 The tdd-guide agent will:
 
-1. **Define interfaces** for inputs/outputs
+1. **Define protocols** for inputs/outputs
 2. **Write tests that will FAIL** (because code doesn't exist yet)
 3. **Run tests** and verify they fail for the right reason
 4. **Write minimal implementation** to make tests pass
@@ -49,191 +49,230 @@ REPEAT:   Next feature/scenario
 ## Example Usage
 
 ```
-User: /tdd I need a function to calculate market liquidity score
+User: /tdd I need a function to calculate portfolio risk score
 
 Agent (tdd-guide):
-# TDD Session: Market Liquidity Score Calculator
+# TDD Session: Portfolio Risk Score Calculator
 
-## Step 1: Define Interface (SCAFFOLD)
+## Step 1: Define Protocol (SCAFFOLD)
 
-```typescript
-// lib/liquidity.ts
-export interface MarketData {
-  totalVolume: number
-  bidAskSpread: number
-  activeTraders: number
-  lastTradeTime: Date
+```swift
+// Sources/Domain/Models/PortfolioData.swift
+struct PortfolioData: Sendable {
+    let totalValue: Decimal
+    let volatility: Double
+    let assetCount: Int
+    let lastRebalanceDate: Date
 }
 
-export function calculateLiquidityScore(market: MarketData): number {
-  // TODO: Implementation
-  throw new Error('Not implemented')
+// Sources/Domain/Services/RiskCalculating.swift
+protocol RiskCalculating: Sendable {
+    func calculateRiskScore(portfolio: PortfolioData) -> Int
+}
+
+// Sources/Domain/Services/RiskCalculator.swift
+struct RiskCalculator: RiskCalculating {
+    func calculateRiskScore(portfolio: PortfolioData) -> Int {
+        // TODO: Implementation
+        fatalError("Not implemented")
+    }
 }
 ```
 
 ## Step 2: Write Failing Test (RED)
 
-```typescript
-// lib/liquidity.test.ts
-import { calculateLiquidityScore } from './liquidity'
+```swift
+// Tests/DomainTests/RiskCalculatorTests.swift
+import Testing
+@testable import Domain
 
-describe('calculateLiquidityScore', () => {
-  it('should return high score for liquid market', () => {
-    const market = {
-      totalVolume: 100000,
-      bidAskSpread: 0.01,
-      activeTraders: 500,
-      lastTradeTime: new Date()
+@Suite("RiskCalculator Tests")
+struct RiskCalculatorTests {
+    let sut = RiskCalculator()
+
+    @Test("Returns high score for diversified low-volatility portfolio")
+    func highScoreForLowRisk() {
+        let portfolio = PortfolioData(
+            totalValue: 100_000,
+            volatility: 0.05,
+            assetCount: 20,
+            lastRebalanceDate: Date()
+        )
+
+        let score = sut.calculateRiskScore(portfolio: portfolio)
+
+        #expect(score > 80)
+        #expect(score <= 100)
     }
 
-    const score = calculateLiquidityScore(market)
+    @Test("Returns low score for concentrated high-volatility portfolio")
+    func lowScoreForHighRisk() {
+        let portfolio = PortfolioData(
+            totalValue: 10_000,
+            volatility: 0.8,
+            assetCount: 2,
+            lastRebalanceDate: Calendar.current.date(byAdding: .day, value: -180, to: Date())!
+        )
 
-    expect(score).toBeGreaterThan(80)
-    expect(score).toBeLessThanOrEqual(100)
-  })
+        let score = sut.calculateRiskScore(portfolio: portfolio)
 
-  it('should return low score for illiquid market', () => {
-    const market = {
-      totalVolume: 100,
-      bidAskSpread: 0.5,
-      activeTraders: 2,
-      lastTradeTime: new Date(Date.now() - 86400000) // 1 day ago
+        #expect(score < 30)
+        #expect(score >= 0)
     }
 
-    const score = calculateLiquidityScore(market)
+    @Test("Returns zero for empty portfolio")
+    func zeroForEmptyPortfolio() {
+        let portfolio = PortfolioData(
+            totalValue: 0,
+            volatility: 0,
+            assetCount: 0,
+            lastRebalanceDate: Date()
+        )
 
-    expect(score).toBeLessThan(30)
-    expect(score).toBeGreaterThanOrEqual(0)
-  })
+        let score = sut.calculateRiskScore(portfolio: portfolio)
 
-  it('should handle edge case: zero volume', () => {
-    const market = {
-      totalVolume: 0,
-      bidAskSpread: 0,
-      activeTraders: 0,
-      lastTradeTime: new Date()
+        #expect(score == 0)
     }
-
-    const score = calculateLiquidityScore(market)
-
-    expect(score).toBe(0)
-  })
-})
+}
 ```
 
 ## Step 3: Run Tests - Verify FAIL
 
 ```bash
-npm test lib/liquidity.test.ts
+xcodebuild test \
+  -scheme MyApp \
+  -destination 'platform=iOS Simulator,name=iPhone 16' \
+  -only-testing:DomainTests/RiskCalculatorTests \
+  2>&1 | xcbeautify
 
-FAIL lib/liquidity.test.ts
-  ✕ should return high score for liquid market (2 ms)
-    Error: Not implemented
+Test Suite RiskCalculatorTests started
+✗ highScoreForLowRisk - Fatal error: Not implemented
+✗ lowScoreForHighRisk - Fatal error: Not implemented
+✗ zeroForEmptyPortfolio - Fatal error: Not implemented
 
-1 test failed, 0 passed
+Executed 3 tests, with 3 failures
 ```
 
 ✅ Tests fail as expected. Ready to implement.
 
 ## Step 4: Implement Minimal Code (GREEN)
 
-```typescript
-// lib/liquidity.ts
-export function calculateLiquidityScore(market: MarketData): number {
-  // Handle zero volume edge case
-  if (market.totalVolume === 0) {
-    return 0
-  }
+```swift
+// Sources/Domain/Services/RiskCalculator.swift
+struct RiskCalculator: RiskCalculating {
+    func calculateRiskScore(portfolio: PortfolioData) -> Int {
+        // Handle empty portfolio edge case
+        guard portfolio.totalValue > 0 else { return 0 }
 
-  // Calculate component scores (0-100 scale)
-  const volumeScore = Math.min(market.totalVolume / 1000, 100)
-  const spreadScore = Math.max(100 - (market.bidAskSpread * 1000), 0)
-  const traderScore = Math.min(market.activeTraders / 10, 100)
+        // Calculate component scores (0-100 scale)
+        let volatilityScore = max(100 - Int(portfolio.volatility * 100), 0)
+        let diversificationScore = min(portfolio.assetCount * 5, 100)
 
-  // Recent activity bonus
-  const hoursSinceLastTrade = (Date.now() - market.lastTradeTime.getTime()) / (1000 * 60 * 60)
-  const recencyScore = Math.max(100 - (hoursSinceLastTrade * 10), 0)
+        // Recent rebalance bonus
+        let daysSinceRebalance = Calendar.current.dateComponents(
+            [.day],
+            from: portfolio.lastRebalanceDate,
+            to: Date()
+        ).day ?? 365
+        let recencyScore = max(100 - daysSinceRebalance, 0)
 
-  // Weighted average
-  const score = (
-    volumeScore * 0.4 +
-    spreadScore * 0.3 +
-    traderScore * 0.2 +
-    recencyScore * 0.1
-  )
+        // Weighted average
+        let weightedScore = Double(volatilityScore) * 0.4 +
+                           Double(diversificationScore) * 0.4 +
+                           Double(recencyScore) * 0.2
 
-  return Math.min(Math.max(score, 0), 100) // Clamp to 0-100
+        return min(max(Int(weightedScore), 0), 100)
+    }
 }
 ```
 
 ## Step 5: Run Tests - Verify PASS
 
 ```bash
-npm test lib/liquidity.test.ts
+xcodebuild test \
+  -scheme MyApp \
+  -destination 'platform=iOS Simulator,name=iPhone 16' \
+  -only-testing:DomainTests/RiskCalculatorTests \
+  2>&1 | xcbeautify
 
-PASS lib/liquidity.test.ts
-  ✓ should return high score for liquid market (3 ms)
-  ✓ should return low score for illiquid market (2 ms)
-  ✓ should handle edge case: zero volume (1 ms)
+Test Suite RiskCalculatorTests started
+✓ highScoreForLowRisk (0.003s)
+✓ lowScoreForHighRisk (0.002s)
+✓ zeroForEmptyPortfolio (0.001s)
 
-3 tests passed
+Executed 3 tests, with 0 failures
 ```
 
 ✅ All tests passing!
 
 ## Step 6: Refactor (IMPROVE)
 
-```typescript
-// lib/liquidity.ts - Refactored with constants and better readability
-const WEIGHTS = {
-  VOLUME: 0.4,
-  SPREAD: 0.3,
-  TRADERS: 0.2,
-  RECENCY: 0.1,
-} as const
+```swift
+// Sources/Domain/Services/RiskCalculator.swift
+struct RiskCalculator: RiskCalculating {
+    private enum Weight {
+        static let volatility = 0.4
+        static let diversification = 0.4
+        static let recency = 0.2
+    }
 
-const SCALE_FACTORS = {
-  VOLUME: 1000,
-  SPREAD: 1000,
-  TRADERS: 10,
-  RECENCY_PENALTY: 10,
-} as const
+    private enum Scale {
+        static let diversificationMultiplier = 5
+        static let maxScore = 100
+    }
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max)
-}
+    func calculateRiskScore(portfolio: PortfolioData) -> Int {
+        guard portfolio.totalValue > 0 else { return 0 }
 
-export function calculateLiquidityScore(market: MarketData): number {
-  if (market.totalVolume === 0) return 0
+        let components = calculateComponents(portfolio: portfolio)
+        let weightedScore = applyWeights(components)
 
-  const volumeScore = Math.min(market.totalVolume / SCALE_FACTORS.VOLUME, 100)
-  const spreadScore = clamp(100 - (market.bidAskSpread * SCALE_FACTORS.SPREAD), 0, 100)
-  const traderScore = Math.min(market.activeTraders / SCALE_FACTORS.TRADERS, 100)
+        return clamp(Int(weightedScore), min: 0, max: Scale.maxScore)
+    }
 
-  const hoursSinceLastTrade = (Date.now() - market.lastTradeTime.getTime()) / (1000 * 60 * 60)
-  const recencyScore = clamp(100 - (hoursSinceLastTrade * SCALE_FACTORS.RECENCY_PENALTY), 0, 100)
+    private func calculateComponents(portfolio: PortfolioData) -> (volatility: Int, diversification: Int, recency: Int) {
+        let volatility = Scale.maxScore - Int(portfolio.volatility * 100)
+        let diversification = portfolio.assetCount * Scale.diversificationMultiplier
+        let recency = Scale.maxScore - daysSinceRebalance(portfolio.lastRebalanceDate)
 
-  const weightedScore =
-    volumeScore * WEIGHTS.VOLUME +
-    spreadScore * WEIGHTS.SPREAD +
-    traderScore * WEIGHTS.TRADERS +
-    recencyScore * WEIGHTS.RECENCY
+        return (
+            clamp(volatility, min: 0, max: Scale.maxScore),
+            clamp(diversification, min: 0, max: Scale.maxScore),
+            clamp(recency, min: 0, max: Scale.maxScore)
+        )
+    }
 
-  return clamp(weightedScore, 0, 100)
+    private func applyWeights(_ components: (volatility: Int, diversification: Int, recency: Int)) -> Double {
+        Double(components.volatility) * Weight.volatility +
+        Double(components.diversification) * Weight.diversification +
+        Double(components.recency) * Weight.recency
+    }
+
+    private func daysSinceRebalance(_ date: Date) -> Int {
+        Calendar.current.dateComponents([.day], from: date, to: Date()).day ?? 365
+    }
+
+    private func clamp(_ value: Int, min: Int, max: Int) -> Int {
+        Swift.min(Swift.max(value, min), max)
+    }
 }
 ```
 
 ## Step 7: Verify Tests Still Pass
 
 ```bash
-npm test lib/liquidity.test.ts
+xcodebuild test \
+  -scheme MyApp \
+  -destination 'platform=iOS Simulator,name=iPhone 16' \
+  -only-testing:DomainTests/RiskCalculatorTests \
+  2>&1 | xcbeautify
 
-PASS lib/liquidity.test.ts
-  ✓ should return high score for liquid market (3 ms)
-  ✓ should return low score for illiquid market (2 ms)
-  ✓ should handle edge case: zero volume (1 ms)
+Test Suite RiskCalculatorTests started
+✓ highScoreForLowRisk (0.003s)
+✓ lowScoreForHighRisk (0.002s)
+✓ zeroForEmptyPortfolio (0.001s)
 
-3 tests passed
+Executed 3 tests, with 0 failures
 ```
 
 ✅ Refactoring complete, tests still passing!
@@ -241,11 +280,16 @@ PASS lib/liquidity.test.ts
 ## Step 8: Check Coverage
 
 ```bash
-npm test -- --coverage lib/liquidity.test.ts
+xcodebuild test \
+  -scheme MyApp \
+  -destination 'platform=iOS Simulator,name=iPhone 16' \
+  -enableCodeCoverage YES \
+  2>&1 | xcbeautify
 
-File           | % Stmts | % Branch | % Funcs | % Lines
----------------|---------|----------|---------|--------
-liquidity.ts   |   100   |   100    |   100   |   100
+xcrun xccov view --report Build/Logs/Test/*.xcresult --files-for-target Domain
+
+RiskCalculator.swift    100.0%
+PortfolioData.swift     100.0%
 
 Coverage: 100% ✅ (Target: 80%)
 ```
@@ -262,6 +306,8 @@ Coverage: 100% ✅ (Target: 80%)
 - ✅ Refactor only after tests are green
 - ✅ Add edge cases and error scenarios
 - ✅ Aim for 80%+ coverage (100% for critical code)
+- ✅ Use `@Suite` and `@Test` from Swift Testing
+- ✅ Use `#expect` for assertions
 
 **DON'T:**
 - ❌ Write implementation before tests
@@ -269,26 +315,26 @@ Coverage: 100% ✅ (Target: 80%)
 - ❌ Write too much code at once
 - ❌ Ignore failing tests
 - ❌ Test implementation details (test behavior)
-- ❌ Mock everything (prefer integration tests)
+- ❌ Mock everything (prefer real dependencies when possible)
+- ❌ Use force unwrap (!) in test setup
 
 ## Test Types to Include
 
 **Unit Tests** (Function-level):
 - Happy path scenarios
-- Edge cases (empty, null, max values)
+- Edge cases (empty, nil, max values)
 - Error conditions
 - Boundary values
 
-**Integration Tests** (Component-level):
-- API endpoints
-- Database operations
-- External service calls
-- React components with hooks
+**Integration Tests** (Module-level):
+- ViewModel with real services
+- Repository with mock persistence
+- Use case combinations
 
-**E2E Tests** (use `/e2e` command):
+**UI Tests** (use `/e2e` command):
 - Critical user flows
 - Multi-step processes
-- Full stack integration
+- Full app integration
 
 ## Coverage Requirements
 
@@ -309,11 +355,55 @@ Coverage: 100% ✅ (Target: 80%)
 
 Never skip the RED phase. Never write code before tests.
 
+## Swift Testing Quick Reference
+
+```swift
+import Testing
+
+// Test Suite
+@Suite("Feature Tests")
+struct FeatureTests {
+    // Setup (runs before each test)
+    let sut: MyService
+
+    init() {
+        sut = MyService()
+    }
+
+    // Basic test
+    @Test("Description of what it tests")
+    func testSomething() {
+        #expect(sut.value == expected)
+    }
+
+    // Test with arguments
+    @Test(arguments: [1, 2, 3])
+    func testMultipleValues(value: Int) {
+        #expect(value > 0)
+    }
+
+    // Async test
+    @Test("Async operation completes")
+    func testAsync() async throws {
+        let result = try await sut.fetchData()
+        #expect(result.isEmpty == false)
+    }
+
+    // Test that throws
+    @Test("Throws error for invalid input")
+    func testThrows() {
+        #expect(throws: ValidationError.self) {
+            try sut.validate(input: "")
+        }
+    }
+}
+```
+
 ## Integration with Other Commands
 
 - Use `/plan` first to understand what to build
 - Use `/tdd` to implement with tests
-- Use `/build-and-fix` if build errors occur
+- Use `/build-fix` if build errors occur
 - Use `/code-review` to review implementation
 - Use `/test-coverage` to verify coverage
 

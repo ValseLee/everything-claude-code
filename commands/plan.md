@@ -4,7 +4,7 @@ description: Restate requirements, assess risks, and create step-by-step impleme
 
 # Plan Command
 
-This command invokes the **planner** agent to create a comprehensive implementation plan before writing any code.
+This command invokes the **planner** agent to create a comprehensive implementation plan before writing any code for iOS/Swift projects.
 
 ## What This Command Does
 
@@ -19,7 +19,7 @@ Use `/plan` when:
 - Starting a new feature
 - Making significant architectural changes
 - Working on complex refactoring
-- Multiple files/components will be affected
+- Multiple files/modules will be affected
 - Requirements are unclear or ambiguous
 
 ## How It Works
@@ -28,7 +28,7 @@ The planner agent will:
 
 1. **Analyze the request** and restate requirements in clear terms
 2. **Break down into phases** with specific, actionable steps
-3. **Identify dependencies** between components
+3. **Identify dependencies** between modules
 4. **Assess risks** and potential blockers
 5. **Estimate complexity** (High/Medium/Low)
 6. **Present the plan** and WAIT for your explicit confirmation
@@ -36,57 +36,95 @@ The planner agent will:
 ## Example Usage
 
 ```
-User: /plan I need to add real-time notifications when markets resolve
+User: /plan I need to add real-time push notifications when portfolio values change significantly
 
 Agent (planner):
-# Implementation Plan: Real-Time Market Resolution Notifications
+# Implementation Plan: Real-Time Portfolio Push Notifications
 
 ## Requirements Restatement
-- Send notifications to users when markets they're watching resolve
-- Support multiple notification channels (in-app, email, webhook)
-- Ensure notifications are delivered reliably
-- Include market outcome and user's position result
+- Send push notifications to users when their portfolio value changes by more than 5%
+- Support both foreground and background notifications
+- Include portfolio change amount and direction in notification
+- Allow users to configure notification thresholds in settings
 
 ## Implementation Phases
 
-### Phase 1: Database Schema
-- Add notifications table with columns: id, user_id, market_id, type, status, created_at
-- Add user_notification_preferences table for channel preferences
-- Create indexes on user_id and market_id for performance
+### Phase 1: Data Layer
+- Create `NotificationPreference` SwiftData model
+  - `id: UUID`
+  - `userID: String`
+  - `threshold: Double` (default: 0.05)
+  - `isEnabled: Bool`
+  - `createdAt: Date`
+- Create `PortfolioChange` model for tracking changes
+- Add migration for new schema
 
-### Phase 2: Notification Service
-- Create notification service in lib/notifications.ts
-- Implement notification queue using BullMQ/Redis
-- Add retry logic for failed deliveries
-- Create notification templates
+### Phase 2: Domain Layer
+- Create `NotificationService` protocol and implementation
+  - `func shouldNotify(change: PortfolioChange) -> Bool`
+  - `func scheduleNotification(for change: PortfolioChange) async throws`
+- Create `PortfolioMonitor` actor for background monitoring
+  - Track previous values
+  - Calculate percentage changes
+  - Coordinate with NotificationService
 
-### Phase 3: Integration Points
-- Hook into market resolution logic (when status changes to "resolved")
-- Query all users with positions in market
-- Enqueue notifications for each user
+### Phase 3: Infrastructure Layer
+- Configure UNUserNotificationCenter
+- Request notification permissions
+- Create notification content builder
+- Handle notification actions (deep link to portfolio)
+- Register for background app refresh
 
-### Phase 4: Frontend Components
-- Create NotificationBell component in header
-- Add NotificationList modal
-- Implement real-time updates via Supabase subscriptions
-- Add notification preferences page
+### Phase 4: Presentation Layer
+- Create `NotificationSettingsView`
+- Create `NotificationSettingsViewModel` (@Observable)
+- Add notification preferences to Settings tab
+- Handle notification permission states in UI
+
+### Phase 5: Integration
+- Wire up PortfolioMonitor with app lifecycle
+- Handle `scenePhase` changes for background monitoring
+- Test notification delivery in various states
+- Add analytics tracking for notifications
 
 ## Dependencies
-- Redis (for queue)
-- Email service (SendGrid/Resend)
-- Supabase real-time subscriptions
+- UNUserNotificationCenter (iOS)
+- BackgroundTasks framework (for background refresh)
+- SwiftData (for persistence)
 
 ## Risks
-- HIGH: Email deliverability (SPF/DKIM required)
-- MEDIUM: Performance with 1000+ users per market
-- MEDIUM: Notification spam if markets resolve frequently
-- LOW: Real-time subscription overhead
+- HIGH: Background execution limits may delay notifications
+- MEDIUM: Users may not grant notification permissions
+- MEDIUM: Rate limiting needed to prevent notification spam
+- LOW: Deep link handling complexity
+
+## Architecture Considerations
+
+```
+┌─────────────────────────────────────────────────────┐
+│                  Presentation                        │
+│  NotificationSettingsView ← NotificationSettingsVM   │
+└─────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────┐
+│                    Domain                           │
+│  NotificationService  │  PortfolioMonitor (Actor)   │
+└─────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────┐
+│                     Data                            │
+│  NotificationPreference  │  PortfolioChange         │
+│              (SwiftData Models)                     │
+└─────────────────────────────────────────────────────┘
+```
 
 ## Estimated Complexity: MEDIUM
-- Backend: 4-6 hours
-- Frontend: 3-4 hours
-- Testing: 2-3 hours
-- Total: 9-13 hours
+- Data Layer: Small
+- Domain Layer: Medium
+- Presentation: Small
+- Integration: Medium
 
 **WAITING FOR CONFIRMATION**: Proceed with this plan? (yes/no/modify)
 ```
@@ -100,11 +138,46 @@ If you want changes, respond with:
 - "different approach: [alternative]"
 - "skip phase 2 and do phase 3 first"
 
+## Plan Output Format
+
+Every plan should include:
+
+1. **Requirements Restatement** - Clear understanding of what's needed
+2. **Implementation Phases** - Ordered steps with specific deliverables
+3. **Dependencies** - Frameworks, services, or modules required
+4. **Risks** - Potential issues with severity ratings
+5. **Architecture Diagram** - Visual representation when helpful
+6. **Complexity Estimate** - High/Medium/Low per phase
+
+## iOS-Specific Considerations
+
+When planning iOS features, always consider:
+
+**SwiftUI Patterns:**
+- View-ViewModel separation
+- @Observable for state management
+- Environment for dependency injection
+
+**Concurrency:**
+- Actor isolation for shared state
+- MainActor for UI updates
+- Structured concurrency with async/await
+
+**Data Persistence:**
+- SwiftData models and containers
+- Migration strategies
+- iCloud sync requirements
+
+**Security:**
+- Keychain for sensitive data
+- App Transport Security
+- Data Protection classes
+
 ## Integration with Other Commands
 
 After planning:
 - Use `/tdd` to implement with test-driven development
-- Use `/build-and-fix` if build errors occur
+- Use `/build-fix` if build errors occur
 - Use `/code-review` to review completed implementation
 
 ## Related Agents

@@ -1,19 +1,19 @@
 ---
 name: tdd-workflow
-description: Use this skill when writing new features, fixing bugs, or refactoring code. Enforces test-driven development with 80%+ coverage including unit, integration, and E2E tests.
+description: Use this skill when writing new features, fixing bugs, or refactoring code. Enforces test-driven development with Swift Testing framework and 80%+ coverage.
 ---
 
 # Test-Driven Development Workflow
 
-This skill ensures all code development follows TDD principles with comprehensive test coverage.
+This skill ensures all code development follows TDD principles using Swift Testing framework.
 
 ## When to Activate
 
 - Writing new features or functionality
 - Fixing bugs or issues
 - Refactoring existing code
-- Adding API endpoints
-- Creating new components
+- Adding new models or services
+- Creating new views with ViewModels
 
 ## Core Principles
 
@@ -21,7 +21,7 @@ This skill ensures all code development follows TDD principles with comprehensiv
 ALWAYS write tests first, then implement code to make tests pass.
 
 ### 2. Coverage Requirements
-- Minimum 80% coverage (unit + integration + E2E)
+- Minimum 80% coverage (unit + integration)
 - All edge cases covered
 - Error scenarios tested
 - Boundary conditions verified
@@ -29,80 +29,111 @@ ALWAYS write tests first, then implement code to make tests pass.
 ### 3. Test Types
 
 #### Unit Tests
-- Individual functions and utilities
-- Component logic
-- Pure functions
-- Helpers and utilities
+- Individual functions and methods
+- ViewModel logic
+- Use cases
+- Pure functions and utilities
 
 #### Integration Tests
-- API endpoints
+- Repository implementations
+- API client behavior
 - Database operations
-- Service interactions
-- External API calls
+- Module interactions
 
-#### E2E Tests (Playwright)
+#### UI Tests (XCUITest)
 - Critical user flows
 - Complete workflows
-- Browser automation
 - UI interactions
 
 ## TDD Workflow Steps
 
-### Step 1: Write User Journeys
+### Step 1: Write User Stories
 ```
 As a [role], I want to [action], so that [benefit]
 
 Example:
-As a user, I want to search for markets semantically,
-so that I can find relevant markets even without exact keywords.
+As a user, I want to search for products by name,
+so that I can find items without browsing all categories.
 ```
 
-### Step 2: Generate Test Cases
-For each user journey, create comprehensive test cases:
+### Step 2: Generate Test Cases (RED)
 
-```typescript
-describe('Semantic Search', () => {
-  it('returns relevant markets for query', async () => {
-    // Test implementation
-  })
+```swift
+import Testing
+@testable import MyApp
 
-  it('handles empty query gracefully', async () => {
-    // Test edge case
-  })
+@Suite("Product Search")
+struct ProductSearchTests {
 
-  it('falls back to substring search when Redis unavailable', async () => {
-    // Test fallback behavior
-  })
+    @Test("returns matching products for query")
+    func searchReturnsMatchingProducts() async throws {
+        let repository = MockProductRepository()
+        let useCase = SearchProductsUseCase(repository: repository)
 
-  it('sorts results by similarity score', async () => {
-    // Test sorting logic
-  })
-})
+        let results = try await useCase.execute(query: "iPhone")
+
+        #expect(results.count > 0)
+        #expect(results.allSatisfy { $0.name.contains("iPhone") })
+    }
+
+    @Test("returns empty array for no matches")
+    func searchReturnsEmptyForNoMatches() async throws {
+        let repository = MockProductRepository()
+        let useCase = SearchProductsUseCase(repository: repository)
+
+        let results = try await useCase.execute(query: "xyznonexistent")
+
+        #expect(results.isEmpty)
+    }
+
+    @Test("handles empty query gracefully")
+    func searchHandlesEmptyQuery() async throws {
+        let repository = MockProductRepository()
+        let useCase = SearchProductsUseCase(repository: repository)
+
+        let results = try await useCase.execute(query: "")
+
+        #expect(results.isEmpty)
+    }
+}
 ```
 
 ### Step 3: Run Tests (They Should Fail)
 ```bash
-npm test
-# Tests should fail - we haven't implemented yet
+# In Xcode: ⌘ + U
+# Or via command line:
+xcodebuild test -scheme MyApp -destination 'platform=iOS Simulator,name=iPhone 15'
 ```
 
-### Step 4: Implement Code
-Write minimal code to make tests pass:
+### Step 4: Implement Code (GREEN)
 
-```typescript
+```swift
 // Implementation guided by tests
-export async function searchMarkets(query: string) {
-  // Implementation here
+protocol SearchProductsUseCase {
+    func execute(query: String) async throws -> [Product]
+}
+
+final class SearchProductsUseCaseImpl: SearchProductsUseCase {
+    private let repository: ProductRepository
+
+    init(repository: ProductRepository) {
+        self.repository = repository
+    }
+
+    func execute(query: String) async throws -> [Product] {
+        guard !query.isEmpty else { return [] }
+        return try await repository.search(query: query)
+    }
 }
 ```
 
 ### Step 5: Run Tests Again
 ```bash
-npm test
 # Tests should now pass
+xcodebuild test -scheme MyApp -destination 'platform=iOS Simulator,name=iPhone 15'
 ```
 
-### Step 6: Refactor
+### Step 6: Refactor (IMPROVE)
 Improve code quality while keeping tests green:
 - Remove duplication
 - Improve naming
@@ -111,288 +142,463 @@ Improve code quality while keeping tests green:
 
 ### Step 7: Verify Coverage
 ```bash
-npm run test:coverage
-# Verify 80%+ coverage achieved
+# Generate coverage report
+xcodebuild test -scheme MyApp \
+  -destination 'platform=iOS Simulator,name=iPhone 15' \
+  -enableCodeCoverage YES
+
+# View in Xcode: Report Navigator → Coverage
 ```
 
-## Testing Patterns
+## Swift Testing Patterns
 
-### Unit Test Pattern (Jest/Vitest)
-```typescript
-import { render, screen, fireEvent } from '@testing-library/react'
-import { Button } from './Button'
+### Basic Test Structure
 
-describe('Button Component', () => {
-  it('renders with correct text', () => {
-    render(<Button>Click me</Button>)
-    expect(screen.getByText('Click me')).toBeInTheDocument()
-  })
+```swift
+import Testing
+@testable import MyApp
 
-  it('calls onClick when clicked', () => {
-    const handleClick = jest.fn()
-    render(<Button onClick={handleClick}>Click</Button>)
+@Suite("Calculator")
+struct CalculatorTests {
 
-    fireEvent.click(screen.getByRole('button'))
+    // Arrange once for all tests
+    let calculator = Calculator()
 
-    expect(handleClick).toHaveBeenCalledTimes(1)
-  })
+    @Test("adds two numbers correctly")
+    func addition() {
+        let result = calculator.add(2, 3)
+        #expect(result == 5)
+    }
 
-  it('is disabled when disabled prop is true', () => {
-    render(<Button disabled>Click</Button>)
-    expect(screen.getByRole('button')).toBeDisabled()
-  })
-})
+    @Test("subtracts two numbers correctly")
+    func subtraction() {
+        let result = calculator.subtract(5, 3)
+        #expect(result == 2)
+    }
+}
 ```
 
-### API Integration Test Pattern
-```typescript
-import { NextRequest } from 'next/server'
-import { GET } from './route'
+### Async Tests
 
-describe('GET /api/markets', () => {
-  it('returns markets successfully', async () => {
-    const request = new NextRequest('http://localhost/api/markets')
-    const response = await GET(request)
-    const data = await response.json()
+```swift
+@Suite("User Service")
+struct UserServiceTests {
 
-    expect(response.status).toBe(200)
-    expect(data.success).toBe(true)
-    expect(Array.isArray(data.data)).toBe(true)
-  })
+    @Test("fetches user successfully")
+    func fetchUser() async throws {
+        let service = UserService(api: MockAPI())
 
-  it('validates query parameters', async () => {
-    const request = new NextRequest('http://localhost/api/markets?limit=invalid')
-    const response = await GET(request)
+        let user = try await service.fetchUser(id: "123")
 
-    expect(response.status).toBe(400)
-  })
+        #expect(user.id == "123")
+        #expect(user.name == "John")
+    }
 
-  it('handles database errors gracefully', async () => {
-    // Mock database failure
-    const request = new NextRequest('http://localhost/api/markets')
-    // Test error handling
-  })
-})
+    @Test("throws error for invalid user ID")
+    func fetchUserInvalidID() async {
+        let service = UserService(api: MockAPI())
+
+        await #expect(throws: UserError.notFound) {
+            try await service.fetchUser(id: "invalid")
+        }
+    }
+}
 ```
 
-### E2E Test Pattern (Playwright)
-```typescript
-import { test, expect } from '@playwright/test'
+### Parameterized Tests
 
-test('user can search and filter markets', async ({ page }) => {
-  // Navigate to markets page
-  await page.goto('/')
-  await page.click('a[href="/markets"]')
+```swift
+@Suite("Email Validation")
+struct EmailValidationTests {
 
-  // Verify page loaded
-  await expect(page.locator('h1')).toContainText('Markets')
+    @Test("validates email format", arguments: [
+        ("test@example.com", true),
+        ("invalid-email", false),
+        ("user@domain", false),
+        ("user.name@company.co.uk", true),
+        ("", false)
+    ])
+    func validateEmail(email: String, isValid: Bool) {
+        let validator = EmailValidator()
+        #expect(validator.isValid(email) == isValid)
+    }
+}
+```
 
-  // Search for markets
-  await page.fill('input[placeholder="Search markets"]', 'election')
+### Test Tags
 
-  // Wait for debounce and results
-  await page.waitForTimeout(600)
+```swift
+extension Tag {
+    @Tag static var slow: Self
+    @Tag static var integration: Self
+    @Tag static var viewModel: Self
+}
 
-  // Verify search results displayed
-  const results = page.locator('[data-testid="market-card"]')
-  await expect(results).toHaveCount(5, { timeout: 5000 })
+@Suite("Integration Tests")
+struct IntegrationTests {
 
-  // Verify results contain search term
-  const firstResult = results.first()
-  await expect(firstResult).toContainText('election', { ignoreCase: true })
+    @Test("database operations", .tags(.integration, .slow))
+    func databaseTest() async throws {
+        // Long-running integration test
+    }
+}
 
-  // Filter by status
-  await page.click('button:has-text("Active")')
+// Run specific tags:
+// xcodebuild test -scheme MyApp -only-testing:IntegrationTests
+```
 
-  // Verify filtered results
-  await expect(results).toHaveCount(3)
-})
+### setUp and tearDown
 
-test('user can create a new market', async ({ page }) => {
-  // Login first
-  await page.goto('/creator-dashboard')
+```swift
+@Suite("Database Tests")
+struct DatabaseTests {
+    var database: TestDatabase!
 
-  // Fill market creation form
-  await page.fill('input[name="name"]', 'Test Market')
-  await page.fill('textarea[name="description"]', 'Test description')
-  await page.fill('input[name="endDate"]', '2025-12-31')
+    init() async throws {
+        // setUp - runs before each test
+        database = try await TestDatabase.create()
+    }
 
-  // Submit form
-  await page.click('button[type="submit"]')
+    deinit {
+        // tearDown - runs after each test
+        database.destroy()
+    }
 
-  // Verify success message
-  await expect(page.locator('text=Market created successfully')).toBeVisible()
+    @Test
+    func insertUser() async throws {
+        try await database.insert(User(name: "Test"))
+        let users = try await database.fetchAll()
+        #expect(users.count == 1)
+    }
+}
+```
 
-  // Verify redirect to market page
-  await expect(page).toHaveURL(/\/markets\/test-market/)
-})
+### Testing ViewModels
+
+```swift
+@Suite("User List ViewModel")
+struct UserListViewModelTests {
+
+    @Test("loads users on init")
+    @MainActor
+    func loadsUsers() async {
+        let mockUseCase = MockFetchUsersUseCase()
+        mockUseCase.result = [User.mock, User.mock]
+
+        let viewModel = UserListView.ViewModel(
+            fetchUsersUseCase: mockUseCase
+        )
+
+        await viewModel.loadUsers()
+
+        #expect(viewModel.state == .loaded(mockUseCase.result))
+    }
+
+    @Test("shows error on failure")
+    @MainActor
+    func showsErrorOnFailure() async {
+        let mockUseCase = MockFetchUsersUseCase()
+        mockUseCase.error = NetworkError.connectionFailed
+
+        let viewModel = UserListView.ViewModel(
+            fetchUsersUseCase: mockUseCase
+        )
+
+        await viewModel.loadUsers()
+
+        if case .error(let message) = viewModel.state {
+            #expect(message.contains("connection"))
+        } else {
+            Issue.record("Expected error state")
+        }
+    }
+}
+```
+
+### Testing Errors
+
+```swift
+@Suite("Order Service")
+struct OrderServiceTests {
+
+    @Test("throws insufficient funds error")
+    func insufficientFunds() async {
+        let service = OrderService()
+
+        await #expect(throws: OrderError.insufficientFunds) {
+            try await service.createOrder(amount: 1000, balance: 100)
+        }
+    }
+
+    @Test("throws any error")
+    func throwsError() async {
+        let service = OrderService()
+
+        await #expect(throws: (any Error).self) {
+            try await service.createOrder(amount: -1, balance: 100)
+        }
+    }
+}
+```
+
+## Test Doubles
+
+### Mock Repository
+
+```swift
+final class MockUserRepository: UserRepository {
+    var users: [User] = []
+    var error: Error?
+    var fetchCallCount = 0
+
+    func fetchUser(id: UUID) async throws -> User {
+        fetchCallCount += 1
+
+        if let error { throw error }
+
+        guard let user = users.first(where: { $0.id == id }) else {
+            throw RepositoryError.notFound
+        }
+        return user
+    }
+
+    func save(_ user: User) async throws {
+        if let error { throw error }
+        users.append(user)
+    }
+}
+
+// Usage in tests
+@Test
+func fetchesUser() async throws {
+    let mock = MockUserRepository()
+    mock.users = [User(id: testID, name: "John")]
+
+    let service = UserService(repository: mock)
+    let user = try await service.getUser(id: testID)
+
+    #expect(user.name == "John")
+    #expect(mock.fetchCallCount == 1)
+}
+```
+
+### Spy for Verification
+
+```swift
+final class SpyAnalytics: AnalyticsService {
+    private(set) var trackedEvents: [(name: String, params: [String: Any])] = []
+
+    func track(event: String, parameters: [String: Any]) {
+        trackedEvents.append((event, parameters))
+    }
+}
+
+@Test
+func tracksLoginEvent() async {
+    let spy = SpyAnalytics()
+    let viewModel = LoginViewModel(analytics: spy)
+
+    await viewModel.login(email: "test@example.com", password: "password")
+
+    #expect(spy.trackedEvents.count == 1)
+    #expect(spy.trackedEvents[0].name == "user_login")
+}
+```
+
+### Stub for Fixed Responses
+
+```swift
+struct StubNetworkClient: NetworkClient {
+    let response: Data
+    let statusCode: Int
+
+    func request(_ endpoint: Endpoint) async throws -> (Data, URLResponse) {
+        let url = URL(string: "https://api.example.com")!
+        let response = HTTPURLResponse(
+            url: url,
+            statusCode: statusCode,
+            httpVersion: nil,
+            headerFields: nil
+        )!
+        return (self.response, response)
+    }
+}
 ```
 
 ## Test File Organization
 
 ```
-src/
-├── components/
-│   ├── Button/
-│   │   ├── Button.tsx
-│   │   ├── Button.test.tsx          # Unit tests
-│   │   └── Button.stories.tsx       # Storybook
-│   └── MarketCard/
-│       ├── MarketCard.tsx
-│       └── MarketCard.test.tsx
-├── app/
-│   └── api/
-│       └── markets/
-│           ├── route.ts
-│           └── route.test.ts         # Integration tests
-└── e2e/
-    ├── markets.spec.ts               # E2E tests
-    ├── trading.spec.ts
-    └── auth.spec.ts
-```
-
-## Mocking External Services
-
-### Supabase Mock
-```typescript
-jest.mock('@/lib/supabase', () => ({
-  supabase: {
-    from: jest.fn(() => ({
-      select: jest.fn(() => ({
-        eq: jest.fn(() => Promise.resolve({
-          data: [{ id: 1, name: 'Test Market' }],
-          error: null
-        }))
-      }))
-    }))
-  }
-}))
-```
-
-### Redis Mock
-```typescript
-jest.mock('@/lib/redis', () => ({
-  searchMarketsByVector: jest.fn(() => Promise.resolve([
-    { slug: 'test-market', similarity_score: 0.95 }
-  ])),
-  checkRedisHealth: jest.fn(() => Promise.resolve({ connected: true }))
-}))
-```
-
-### OpenAI Mock
-```typescript
-jest.mock('@/lib/openai', () => ({
-  generateEmbedding: jest.fn(() => Promise.resolve(
-    new Array(1536).fill(0.1) // Mock 1536-dim embedding
-  ))
-}))
-```
-
-## Test Coverage Verification
-
-### Run Coverage Report
-```bash
-npm run test:coverage
-```
-
-### Coverage Thresholds
-```json
-{
-  "jest": {
-    "coverageThresholds": {
-      "global": {
-        "branches": 80,
-        "functions": 80,
-        "lines": 80,
-        "statements": 80
-      }
-    }
-  }
-}
+MyApp/
+├── Sources/
+│   ├── Domain/
+│   │   ├── UseCases/
+│   │   │   └── FetchUserUseCase.swift
+│   │   └── Entities/
+│   │       └── User.swift
+│   └── Presentation/
+│       └── UserList/
+│           ├── UserListView.swift
+│           └── UserListView+ViewModel.swift
+└── Tests/
+    ├── UnitTests/
+    │   ├── Domain/
+    │   │   └── FetchUserUseCaseTests.swift
+    │   └── Presentation/
+    │       └── UserListViewModelTests.swift
+    ├── IntegrationTests/
+    │   └── UserRepositoryIntegrationTests.swift
+    └── Mocks/
+        ├── MockUserRepository.swift
+        └── MockNetworkClient.swift
 ```
 
 ## Common Testing Mistakes to Avoid
 
 ### ❌ WRONG: Testing Implementation Details
-```typescript
-// Don't test internal state
-expect(component.state.count).toBe(5)
+```swift
+// Don't test private methods or internal state
+#expect(viewModel.internalCache.count == 5)
 ```
 
-### ✅ CORRECT: Test User-Visible Behavior
-```typescript
-// Test what users see
-expect(screen.getByText('Count: 5')).toBeInTheDocument()
-```
-
-### ❌ WRONG: Brittle Selectors
-```typescript
-// Breaks easily
-await page.click('.css-class-xyz')
-```
-
-### ✅ CORRECT: Semantic Selectors
-```typescript
-// Resilient to changes
-await page.click('button:has-text("Submit")')
-await page.click('[data-testid="submit-button"]')
+### ✅ CORRECT: Test Observable Behavior
+```swift
+// Test what users/consumers observe
+#expect(viewModel.displayedItems.count == 5)
 ```
 
 ### ❌ WRONG: No Test Isolation
-```typescript
-// Tests depend on each other
-test('creates user', () => { /* ... */ })
-test('updates same user', () => { /* depends on previous test */ })
+```swift
+// Tests share state - dangerous!
+static var sharedUser: User?
+
+@Test func createsUser() {
+    Self.sharedUser = User(name: "Test")
+}
+
+@Test func updatesUser() {
+    Self.sharedUser?.name = "Updated"  // Depends on previous test!
+}
 ```
 
 ### ✅ CORRECT: Independent Tests
-```typescript
-// Each test sets up its own data
-test('creates user', () => {
-  const user = createTestUser()
-  // Test logic
-})
+```swift
+// Each test creates its own data
+@Test func createsUser() {
+    let user = User(name: "Test")
+    #expect(user.name == "Test")
+}
 
-test('updates user', () => {
-  const user = createTestUser()
-  // Update logic
-})
+@Test func updatesUser() {
+    var user = User(name: "Test")
+    user.name = "Updated"
+    #expect(user.name == "Updated")
+}
+```
+
+### ❌ WRONG: Testing Multiple Things
+```swift
+@Test func userOperations() {
+    let user = createUser()
+    #expect(user != nil)
+
+    updateUser(user)
+    #expect(user.name == "Updated")
+
+    deleteUser(user)
+    #expect(fetchUser(user.id) == nil)
+}
+```
+
+### ✅ CORRECT: One Concept Per Test
+```swift
+@Test func createsUser() { }
+@Test func updatesUserName() { }
+@Test func deletesUser() { }
+```
+
+## Coverage Verification
+
+### Enable Code Coverage
+1. Edit Scheme → Test → Options
+2. Check "Gather coverage for all targets"
+
+### View Coverage Report
+1. Run tests (⌘ + U)
+2. Report Navigator (⌘ + 9)
+3. Select test run → Coverage tab
+
+### Coverage Thresholds
+```
+Minimum Requirements:
+- Lines: 80%
+- Functions: 80%
+- Branches: 80%
+
+Critical Code (100% required):
+- Authentication logic
+- Payment processing
+- Data encryption
+- Core business rules
 ```
 
 ## Continuous Testing
 
-### Watch Mode During Development
+### Xcode Watch Mode
 ```bash
-npm test -- --watch
-# Tests run automatically on file changes
+# Build and test on save (via Xcode)
+# Product → Build For → Testing
+# Then tests run automatically on relevant changes
 ```
 
 ### Pre-Commit Hook
 ```bash
-# Runs before every commit
-npm test && npm run lint
+#!/bin/sh
+# .git/hooks/pre-commit
+
+xcodebuild test -scheme MyApp \
+  -destination 'platform=iOS Simulator,name=iPhone 15' \
+  -quiet || exit 1
+
+echo "✅ Tests passed"
 ```
 
-### CI/CD Integration
+### CI/CD Integration (GitHub Actions)
 ```yaml
-# GitHub Actions
-- name: Run Tests
-  run: npm test -- --coverage
-- name: Upload Coverage
-  uses: codecov/codecov-action@v3
+name: Tests
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Tests
+        run: |
+          xcodebuild test \
+            -scheme MyApp \
+            -destination 'platform=iOS Simulator,name=iPhone 15' \
+            -enableCodeCoverage YES \
+            -resultBundlePath TestResults.xcresult
+
+      - name: Upload Coverage
+        uses: codecov/codecov-action@v4
+        with:
+          xcode: true
+          xcode_archive_path: TestResults.xcresult
 ```
 
 ## Best Practices
 
 1. **Write Tests First** - Always TDD
-2. **One Assert Per Test** - Focus on single behavior
+2. **One Concept Per Test** - Focus on single behavior
 3. **Descriptive Test Names** - Explain what's tested
 4. **Arrange-Act-Assert** - Clear test structure
-5. **Mock External Dependencies** - Isolate unit tests
-6. **Test Edge Cases** - Null, undefined, empty, large
+5. **Use Test Doubles** - Mock, Stub, Spy appropriately
+6. **Test Edge Cases** - nil, empty, boundary values
 7. **Test Error Paths** - Not just happy paths
-8. **Keep Tests Fast** - Unit tests < 50ms each
-9. **Clean Up After Tests** - No side effects
+8. **Keep Tests Fast** - Unit tests < 100ms each
+9. **Maintain Test Independence** - No shared state
 10. **Review Coverage Reports** - Identify gaps
 
 ## Success Metrics
@@ -401,7 +607,7 @@ npm test && npm run lint
 - All tests passing (green)
 - No skipped or disabled tests
 - Fast test execution (< 30s for unit tests)
-- E2E tests cover critical user flows
+- UI tests cover critical user flows
 - Tests catch bugs before production
 
 ---

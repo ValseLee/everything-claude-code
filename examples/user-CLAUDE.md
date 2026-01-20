@@ -28,13 +28,13 @@ Detailed guidelines are in `~/.claude/rules/`:
 
 | Rule File | Contents |
 |-----------|----------|
-| security.md | Security checks, secret management |
-| coding-style.md | Immutability, file organization, error handling |
-| testing.md | TDD workflow, 80% coverage requirement |
+| security.md | Keychain, ATS, Data Protection, iOS security |
+| coding-style.md | Swift immutability, Codable, pure functions |
+| testing.md | Swift Testing workflow, 80% coverage requirement |
 | git-workflow.md | Commit format, PR workflow |
 | agents.md | Agent orchestration, when to use which agent |
-| patterns.md | API response, repository patterns |
-| performance.md | Model selection, context management |
+| patterns.md | View-ViewModel, Repository, Use Case patterns |
+| performance.md | SwiftUI optimization, context management |
 
 ---
 
@@ -45,13 +45,13 @@ Located in `~/.claude/agents/`:
 | Agent | Purpose |
 |-------|---------|
 | planner | Feature implementation planning |
-| architect | System design and architecture |
-| tdd-guide | Test-driven development |
-| code-reviewer | Code review for quality/security |
-| security-reviewer | Security vulnerability analysis |
-| build-error-resolver | Build error resolution |
-| e2e-runner | Playwright E2E testing |
-| refactor-cleaner | Dead code cleanup |
+| architect | iOS system design and architecture |
+| tdd-guide | Swift Testing TDD workflow |
+| code-reviewer | Swift/SwiftUI code review |
+| security-reviewer | iOS security vulnerability analysis |
+| build-error-resolver | xcodebuild/SPM error resolution |
+| e2e-runner | XCUITest E2E testing |
+| refactor-cleaner | Swift dead code cleanup |
 | doc-updater | Documentation updates |
 
 ---
@@ -60,9 +60,15 @@ Located in `~/.claude/agents/`:
 
 ### Code Style
 - No emojis in code, comments, or documentation
-- Prefer immutability - never mutate objects or arrays
+- Prefer immutability - `let` over `var`
 - Many small files over few large files
 - 200-400 lines typical, 800 max per file
+
+### Swift Specifics
+- No forced unwrap `!` except compile-time guaranteed values
+- Use `@Observable` for ViewModels
+- Stateless Views - all state in ViewModel
+- Proper error handling with `Result` or `throws`
 
 ### Git
 - Conventional commits: `feat:`, `fix:`, `refactor:`, `docs:`, `test:`
@@ -72,16 +78,18 @@ Located in `~/.claude/agents/`:
 ### Testing
 - TDD: Write tests first
 - 80% minimum coverage
-- Unit + integration + E2E for critical flows
+- Swift Testing framework (`@Suite`, `@Test`)
+- XCUITest for critical flows
 
 ---
 
 ## Editor Integration
 
-I use Zed as my primary editor:
-- Agent Panel for file tracking
-- CMD+Shift+R for command palette
-- Vim mode enabled
+I use Xcode as my primary IDE:
+- Xcode 16+ for iOS 18 features
+- SwiftFormat for code formatting
+- SwiftLint for linting
+- Periphery for dead code detection
 
 ---
 
@@ -89,9 +97,10 @@ I use Zed as my primary editor:
 
 You are successful when:
 - All tests pass (80%+ coverage)
-- No security vulnerabilities
+- No security vulnerabilities (Keychain for secrets, ATS enabled)
 - Code is readable and maintainable
 - User requirements are met
+- Build succeeds with no warnings
 
 ---
 

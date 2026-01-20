@@ -1,10 +1,10 @@
 # Example Project CLAUDE.md
 
-This is an example project-level CLAUDE.md file. Place this in your project root.
+This is an example project-level CLAUDE.md file. Place this in your iOS project root.
 
 ## Project Overview
 
-[Brief description of your project - what it does, tech stack]
+[Brief description of your app - what it does, target iOS version, key frameworks]
 
 ## Critical Rules
 
@@ -13,76 +13,139 @@ This is an example project-level CLAUDE.md file. Place this in your project root
 - Many small files over few large files
 - High cohesion, low coupling
 - 200-400 lines typical, 800 max per file
-- Organize by feature/domain, not by type
+- Organize by feature/module, not by type
 
 ### 2. Code Style
 
 - No emojis in code, comments, or documentation
-- Immutability always - never mutate objects or arrays
-- No console.log in production code
-- Proper error handling with try/catch
-- Input validation with Zod or similar
+- Immutability always - prefer `let` over `var`
+- No `print()` in production code
+- Proper error handling with `do/catch` and `Result`
+- No forced unwrap `!` except compile-time guaranteed values
 
-### 3. Testing
+### 3. Architecture
+
+- View-ViewModel pattern with `@Observable`
+- Stateless Views - all state in ViewModel
+- Clean Architecture: UI -> Domain -> Data layers
+- Repository pattern for data access
+
+### 4. Testing
 
 - TDD: Write tests first
 - 80% minimum coverage
-- Unit tests for utilities
-- Integration tests for APIs
-- E2E tests for critical flows
+- Use Swift Testing framework (`@Suite`, `@Test`)
+- Unit tests for ViewModels and Use Cases
+- UI tests with XCUITest for critical flows
 
-### 4. Security
+### 5. Security
 
 - No hardcoded secrets
-- Environment variables for sensitive data
+- Use Keychain for sensitive data
+- App Transport Security (ATS) enabled
+- Data Protection for files at rest
 - Validate all user inputs
-- Parameterized queries only
-- CSRF protection enabled
 
 ## File Structure
 
 ```
-src/
-|-- app/              # Next.js app router
-|-- components/       # Reusable UI components
-|-- hooks/            # Custom React hooks
-|-- lib/              # Utility libraries
-|-- types/            # TypeScript definitions
+MyApp/
+|-- Sources/
+|   |-- Features/           # Feature modules
+|   |   |-- Home/
+|   |   |   |-- HomeView.swift
+|   |   |   |-- HomeViewModel.swift
+|   |   |-- Settings/
+|   |-- Core/               # Shared domain logic
+|   |   |-- Models/
+|   |   |-- UseCases/
+|   |   |-- Repositories/
+|   |-- Infrastructure/     # External dependencies
+|   |   |-- Network/
+|   |   |-- Persistence/
+|   |-- App/                # App entry point
+|       |-- MyAppApp.swift
+|-- Tests/
+|   |-- UnitTests/
+|   |-- UITests/
 ```
 
 ## Key Patterns
 
-### API Response Format
+### View-ViewModel Pattern
 
-```typescript
-interface ApiResponse<T> {
-  success: boolean
-  data?: T
-  error?: string
+```swift
+struct HomeView: View {
+    @State private var viewModel = ViewModel()
+
+    var body: some View {
+        List(viewModel.items) { item in
+            Text(item.title)
+        }
+        .task { await viewModel.loadItems() }
+    }
+}
+
+extension HomeView {
+    @Observable @MainActor
+    final class ViewModel {
+        private(set) var items: [Item] = []
+        private let useCase: FetchItemsUseCase
+
+        init(useCase: FetchItemsUseCase = .init()) {
+            self.useCase = useCase
+        }
+
+        func loadItems() async {
+            items = await useCase.execute()
+        }
+    }
 }
 ```
 
 ### Error Handling
 
-```typescript
-try {
-  const result = await operation()
-  return { success: true, data: result }
-} catch (error) {
-  console.error('Operation failed:', error)
-  return { success: false, error: 'User-friendly message' }
+```swift
+enum AppError: LocalizedError {
+    case networkUnavailable
+    case invalidData
+    case unauthorized
+
+    var errorDescription: String? {
+        switch self {
+        case .networkUnavailable: "Network unavailable"
+        case .invalidData: "Invalid data received"
+        case .unauthorized: "Session expired"
+        }
+    }
+}
+
+func fetchData() async -> Result<Data, AppError> {
+    do {
+        let data = try await networkClient.fetch()
+        return .success(data)
+    } catch {
+        return .failure(.networkUnavailable)
+    }
 }
 ```
 
-## Environment Variables
+## Environment Configuration
 
-```bash
-# Required
-DATABASE_URL=
-API_KEY=
+```swift
+// Use xcconfig files for environment-specific values
+// Debug.xcconfig
+API_BASE_URL = https:/$()/api.dev.example.com
 
-# Optional
-DEBUG=false
+// Release.xcconfig
+API_BASE_URL = https:/$()/api.example.com
+
+// Access via Info.plist or Bundle
+extension Bundle {
+    var apiBaseURL: URL {
+        URL(string: infoDictionary?["API_BASE_URL"] as? String ?? "")!
+    }
+}
 ```
 
 ## Available Commands
@@ -90,7 +153,7 @@ DEBUG=false
 - `/tdd` - Test-driven development workflow
 - `/plan` - Create implementation plan
 - `/code-review` - Review code quality
-- `/build-fix` - Fix build errors
+- `/build-fix` - Fix xcodebuild errors
 
 ## Git Workflow
 
